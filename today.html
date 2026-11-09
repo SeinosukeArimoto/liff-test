@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今日</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root { --acc:#f28c28; --ok:#2e9e5b; --line:#e5e5e5; --sub:#888; }
+  body { font-family: -apple-system, "Hiragino Sans", sans-serif; margin:0; color:#222; background:#fff; }
+  header { padding:14px 16px; border-bottom:1px solid var(--line); font-weight:bold; font-size:18px; }
+  .sub { font-size:12px; color:var(--sub); font-weight:normal; margin-top:2px; }
+  .task { margin:12px 14px 0; padding:12px 14px; border:1px solid var(--line); border-radius:12px; }
+  .task .t { font-size:12px; color:var(--sub); } .task .n { font-size:15px; font-weight:bold; margin:2px 0 8px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .chips button { border:1px solid var(--acc); background:#fff; color:#b26a00; border-radius:16px; padding:6px 12px; font-size:13px; }
+  .chips button.sel { background:var(--acc); color:#fff; }
+  .pos { margin-top:8px; display:none; font-size:13px; } .pos.show { display:block; }
+  .pos input { width:80px; font-size:16px; padding:4px 6px; border:1px solid #ccc; border-radius:8px; }
+  .send { margin:18px 14px; width:calc(100% - 28px); padding:13px; border:0; border-radius:12px; background:var(--ok); color:#fff; font-size:16px; font-weight:bold; }
+  .send:disabled { background:#bbb; }
+  #msg { margin:0 14px 24px; font-size:14px; } .err { color:#c0392b; }
+</style>
+</head>
+<body>
+<header>今日<div class="sub" id="who"></div></header>
+<div id="tasks"></div>
+<button class="send" id="send" disabled>報告する</button>
+<div id="msg"></div>
+<script>
+  var LIFF_ID = '2012504695-oSmM1JBO';
+  // テスト用GASの「ウェブアプリのURL」（/exec で終わるもの）をここに入れる
+  var GAS_URL = 'https://script.google.com/macros/s/AKfycbw4UACUX9iF7v09H6gcsfct7XXvyrlYMA2C1HnOKQFirHL3604BkVITIIczcXldfmNF/exec';
+
+  // テスト用のダミーの今日のやること（本番では、計画のデータから出す）
+  var TASKS = [
+    { sub: '英語', name: 'システム英単語', a: 51, b: 75, unit: '語' },
+    { sub: '数学', name: '基礎問題精講 Ⅰ・A', a: 9, b: 11, unit: '題' }
+  ];
+  var state = TASKS.map(function () { return { mode: null, pos: '' }; });
+  var profile = null;
+
+  function render() {
+    document.getElementById('tasks').innerHTML = TASKS.map(function (t, i) {
+      var s = state[i];
+      return '<div class="task"><div class="t">' + t.sub + '</div><div class="n">' + t.name + '　' + t.a + '〜' + t.b + t.unit + '</div>' +
+        '<div class="chips">' +
+        '<button class="' + (s.mode === 'done' ? 'sel' : '') + '" onclick="setMode(' + i + ',\'done\')">予定どおり</button>' +
+        '<button class="' + (s.mode === 'pos' ? 'sel' : '') + '" onclick="setMode(' + i + ',\'pos\')">ここまで…</button>' +
+        '<button class="' + (s.mode === 'none' ? 'sel' : '') + '" onclick="setMode(' + i + ',\'none\')">やらなかった</button></div>' +
+        '<div class="pos ' + (s.mode === 'pos' ? 'show' : '') + '">どこまで進みましたか？　<input type="number" inputmode="numeric" value="' + s.pos + '" oninput="setPos(' + i + ',this.value)"> ' + t.unit + '目まで</div></div>';
+    }).join('');
+    var ok = state.every(function (s) { return s.mode && (s.mode !== 'pos' || s.pos !== ''); });
+    document.getElementById('send').disabled = !ok;
+  }
+  function setMode(i, m) { state[i].mode = m; render(); }
+  function setPos(i, v) { state[i].pos = v; var ok = state.every(function (s) { return s.mode && (s.mode !== 'pos' || s.pos !== ''); }); document.getElementById('send').disabled = !ok; }
+
+  function send() {
+    var btn = document.getElementById('send'), msg = document.getElementById('msg');
+    btn.disabled = true; msg.className = ''; msg.textContent = '送信中…';
+    var results = TASKS.map(function (t, i) {
+      var s = state[i], end = s.mode === 'done' ? t.b : s.mode === 'none' ? 0 : Number(s.pos);
+      return { sub: t.sub, name: t.name, from: t.a, to: t.b, mode: s.mode, end: end };
+    });
+    // Content-Type を text/plain にして、事前確認（CORS）を避ける
+    fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ source: 'liff', userId: profile.userId, name: profile.displayName, results: results }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (!j.ok) throw new Error(j.error || '記録に失敗しました'); msg.textContent = '記録しました。おつかれさまでした。'; })
+      .catch(function (e) { msg.className = 'err'; msg.textContent = 'エラー：' + e.message; btn.disabled = false; });
+  }
+  document.getElementById('send').onclick = send;
+
+  liff.init({ liffId: LIFF_ID }).then(function () {
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    return liff.getProfile().then(function (p) {
+      profile = p;
+      document.getElementById('who').textContent = p.displayName + 'さん';
+      render();
+    });
+  }).catch(function (e) { var m = document.getElementById('msg'); m.className = 'err'; m.textContent = 'エラー：' + e.message; });
+</script>
+</body>
+</html>
