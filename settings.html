@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>通知の設定</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root { --acc:#f28c28; --ok:#2e9e5b; --line:#e5e5e5; }
+  body { font-family: -apple-system, "Hiragino Sans", sans-serif; margin:0; color:#222; background:#fff; }
+  header { padding:14px 16px; border-bottom:1px solid var(--line); font-weight:bold; font-size:18px; }
+  .sec { margin:14px 14px 0; font-weight:bold; font-size:13px; color:#b26a00; }
+  .set { margin:6px 14px 0; padding:12px 13px; border:1px solid var(--line); border-radius:12px; }
+  .set .lbl { font-size:13px; color:#555; margin-bottom:6px; }
+  .set.off { opacity:.4; pointer-events:none; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .chips button { border:1px solid var(--acc); background:#fff; color:#b26a00; border-radius:16px; padding:6px 11px; font-size:12px; }
+  .chips button.sel { background:var(--acc); color:#fff; }
+  .tin { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--acc); border-radius:16px; padding:3px 10px; font-size:12px; color:#b26a00; background:#fff; }
+  .tin input { border:0; background:transparent; font-size:12px; color:inherit; font-family:inherit; width:74px; outline:none; }
+  .tin.sel { background:var(--acc); color:#fff; } .tin.sel input { color:#fff; }
+  .sw { display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+  .tg { width:44px; height:26px; border-radius:13px; background:#ccc; position:relative; border:0; padding:0; }
+  .tg::after { content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:.15s; }
+  .tg.on { background:var(--ok); } .tg.on::after { left:21px; }
+  .send { margin:18px 14px 8px; width:calc(100% - 28px); padding:13px; border:0; border-radius:12px; background:var(--ok); color:#fff; font-size:16px; font-weight:bold; }
+  .send:disabled { background:#bbb; }
+  #msg { margin:0 14px 12px; font-size:14px; } .err { color:#c0392b; }
+  a.back { display:block; margin:0 14px 28px; font-size:14px; color:#2f7de1; text-decoration:none; }
+</style>
+</head>
+<body>
+<header>通知の設定</header>
+<div id="form"></div>
+<button class="send" id="save" disabled>保存する</button>
+<div id="msg"></div>
+<a class="back" href="today.html">← 今日に戻る</a>
+<script>
+  var LIFF_ID = '2012504695-oSmM1JBO';
+  var GAS_URL = 'https://script.google.com/macros/s/AKfycbw4UACUX9iF7v09H6gcsfct7XXvyrlYMA2C1HnOKQFirHL3604BkVITIIczcXldfmNF/exec';
+  var T = ['06:30','07:00','08:00','12:00','17:00','18:00','20:00','21:00','22:00'];
+  var S = null, profile = null;
+
+  function post(o) { return fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(o) }).then(function (r) { return r.json(); }); }
+  function chips(k) {
+    var cur = S[k], custom = T.indexOf(cur) < 0;
+    return '<div class="chips">' + T.map(function (v) { return '<button class="' + (cur === v ? 'sel' : '') + '" onclick="setT(\'' + k + '\',\'' + v + '\')">' + v + '</button>'; }).join('') +
+      '<label class="tin ' + (custom ? 'sel' : '') + '">✎ <input type="time" value="' + (custom ? cur : '') + '" onchange="if(this.value)setT(\'' + k + '\',this.value)"></label></div>';
+  }
+  function render() {
+    document.getElementById('form').innerHTML =
+      '<div class="sec">毎日</div>' +
+      '<div class="set"><div class="lbl">今日のやることを送る時間</div>' + chips('todo') + '</div>' +
+      '<div class="set"><div class="sw"><span>やることと報告を、まとめて送る</span><button class="tg ' + (S.same ? 'on' : '') + '" onclick="toggle()"></button></div></div>' +
+      '<div class="set ' + (S.same ? 'off' : '') + '"><div class="lbl">報告をお願いする時間</div>' + chips('report') + '</div>';
+    document.getElementById('save').disabled = false;
+  }
+  function setT(k, v) { S[k] = v; render(); }
+  function toggle() { S.same = !S.same; render(); }
+
+  document.getElementById('save').onclick = function () {
+    var b = this, m = document.getElementById('msg'); b.disabled = true; m.className = ''; m.textContent = '保存中…';
+    post({ source: 'settings_set', userId: profile.userId, name: profile.displayName, settings: S })
+      .then(function (j) { if (!j.ok) throw new Error(j.error); m.textContent = '保存しました。次の通知から、この時間になります。'; b.disabled = false; })
+      .catch(function (e) { m.className = 'err'; m.textContent = 'エラー：' + e.message; b.disabled = false; });
+  };
+
+  liff.init({ liffId: LIFF_ID }).then(function () {
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    return liff.getProfile().then(function (p) {
+      profile = p;
+      return post({ source: 'settings_get', userId: p.userId }).then(function (j) { if (!j.ok) throw new Error(j.error); S = j.settings; render(); });
+    });
+  }).catch(function (e) { var m = document.getElementById('msg'); m.className = 'err'; m.textContent = 'エラー：' + e.message; });
+</script>
+</body>
+</html>
