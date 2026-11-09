@@ -55,8 +55,9 @@
       '<div class="set ' + (S.same ? 'off' : '') + '"><div class="lbl">報告をお願いする時間</div>' + chips('report') + '</div>';
     document.getElementById('save').disabled = false;
   }
-  function setT(k, v) { S[k] = v; render(); }
-  function toggle() { S.same = !S.same; render(); }
+  function sync() { if (S.same) S.report = S.todo; }   // まとめて送る間は、報告の時間も、やることの時間と同じにする（表も、そろえる）
+  function setT(k, v) { S[k] = v; sync(); render(); }
+  function toggle() { S.same = !S.same; sync(); render(); }
 
   document.getElementById('save').onclick = function () {
     var b = this, m = document.getElementById('msg'); b.disabled = true; m.className = ''; m.textContent = '保存中…';
@@ -69,7 +70,7 @@
     if (!liff.isLoggedIn()) { liff.login(); return; }
     return liff.getProfile().then(function (p) {
       profile = p;
-      return post({ source: 'settings_get', userId: p.userId }).then(function (j) { if (!j.ok) throw new Error(j.error); S = j.settings; render(); });
+      return post({ source: 'settings_get', userId: p.userId }).then(function (j) { if (!j.ok) throw new Error(j.error); S = j.settings; sync(); render(); });
     });
   }).catch(function (e) { var m = document.getElementById('msg'); m.className = 'err'; m.textContent = 'エラー：' + e.message; });
 </script>
