@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LIFFテスト</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  body { font-family: -apple-system, "Hiragino Sans", sans-serif; margin: 0; padding: 24px 16px; color: #222; }
+  h1 { font-size: 20px; margin: 0 0 16px; }
+  dl { margin: 0; } dt { font-size: 12px; color: #888; margin-top: 14px; } dd { margin: 2px 0 0; font-size: 15px; word-break: break-all; }
+  img { width: 64px; height: 64px; border-radius: 50%; }
+  .err { color: #c0392b; }
+</style>
+</head>
+<body>
+<h1 id="msg">読み込み中…</h1>
+<dl id="info"></dl>
+<script>
+  // LINE Developersで作ったLIFFアプリの「LIFF ID」を、ここに入れる
+  var LIFF_ID = '2012504695-oSmM1JBO';
+
+  function row(k, v) { return '<dt>' + k + '</dt><dd>' + v + '</dd>'; }
+
+  liff.init({ liffId: LIFF_ID }).then(function () {
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    return liff.getProfile().then(function (p) {
+      document.getElementById('msg').textContent = 'こんにちは、' + p.displayName + 'さん';
+      document.getElementById('info').innerHTML =
+        (p.pictureUrl ? '<img src="' + p.pictureUrl + '">' : '') +
+        row('ユーザーID（このプロバイダー内の値）', p.userId) +
+        row('LINEの中で開いている', liff.isInClient() ? 'はい' : 'いいえ（ブラウザ）') +
+        row('OS', liff.getOS()) +
+        row('LINEのバージョン', liff.getLineVersion() || '-');
+    });
+  }).catch(function (e) {
+    var m = document.getElementById('msg');
+    m.className = 'err';
+    m.textContent = 'エラー：' + e.message;
+  });
+</script>
+</body>
+</html>
