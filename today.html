@@ -38,7 +38,7 @@
     { sub: '数学', name: '基礎問題精講 Ⅰ・A', a: 9, b: 11, unit: '題' }
   ];
   var state = TASKS.map(function () { return { mode: null, pos: '' }; });
-  var profile = null;
+  var profile = null, sent = false;
 
   function render() {
     document.getElementById('tasks').innerHTML = TASKS.map(function (t, i) {
@@ -67,7 +67,7 @@
     fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ source: 'liff', userId: profile.userId, name: profile.displayName, results: results }) })
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (!j.ok) throw new Error(j.error || '記録に失敗しました'); msg.textContent = '記録しました。おつかれさまでした。'; })
+      .then(function (j) { if (!j.ok) throw new Error(j.error || '記録に失敗しました'); sent = true; document.getElementById('send').textContent = '直して、もう一度送る'; msg.textContent = '記録しました。直すときは、選び直して、もう一度押してください。'; btn.disabled = false; })
       .catch(function (e) { msg.className = 'err'; msg.textContent = 'エラー：' + e.message; btn.disabled = false; });
   }
   document.getElementById('send').onclick = send;
@@ -78,6 +78,19 @@
       profile = p;
       document.getElementById('who').textContent = p.displayName + 'さん';
       render();
+      // 今日、すでに記録があれば、その内容を、最初から選んだ状態にする
+      return fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ source: 'liff_get', userId: p.userId }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) return;
+          var any = false;
+          TASKS.forEach(function (t, i) {
+            var r = j.records && j.records[t.name]; if (!r) return;
+            any = true; state[i].mode = r.mode; state[i].pos = r.mode === 'pos' ? String(r.end) : '';
+          });
+          if (any) { sent = true; document.getElementById('send').textContent = '直して、もう一度送る'; document.getElementById('msg').textContent = '今日の記録を表示しています。直すときは、選び直して、押してください。'; }
+          render();
+        }).catch(function () {});
     });
   }).catch(function (e) { var m = document.getElementById('msg'); m.className = 'err'; m.textContent = 'エラー：' + e.message; });
 </script>
