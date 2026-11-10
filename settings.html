@@ -19,6 +19,8 @@
   .tin { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--acc); border-radius:16px; padding:3px 10px; font-size:12px; color:#b26a00; background:#fff; }
   .tin input { border:0; background:transparent; font-size:12px; color:inherit; font-family:inherit; width:74px; outline:none; }
   .tin.sel { background:var(--acc); color:#fff; } .tin.sel input { color:#fff; }
+  .tin button { border:0; background:var(--acc); color:#fff; border-radius:10px; padding:3px 8px; font-size:12px; }
+  .tin.sel button { background:#fff; color:#b26a00; }
   .sw { display:flex; justify-content:space-between; align-items:center; font-size:14px; }
   .tg { width:44px; height:26px; border-radius:13px; background:#ccc; position:relative; border:0; padding:0; }
   .tg::after { content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:.15s; }
@@ -39,13 +41,14 @@
   var LIFF_ID = '2012504695-oSmM1JBO';
   var GAS_URL = 'https://script.google.com/macros/s/AKfycbw4UACUX9iF7v09H6gcsfct7XXvyrlYMA2C1HnOKQFirHL3604BkVITIIczcXldfmNF/exec';
   var T = ['06:30','07:00','08:00','12:00','17:00','18:00','20:00','21:00','22:00'];
-  var S = null, profile = null;
+  var S = null, profile = null, touched = false, PEND = {};
+  function commit(k) { if (PEND[k]) setT(k, PEND[k]); }   // 時刻の入力は、「決定」を押したときだけ、確定する
 
   function post(o) { return fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(o) }).then(function (r) { return r.json(); }); }
   function chips(k) {
     var cur = S[k], custom = T.indexOf(cur) < 0;
     return '<div class="chips">' + T.map(function (v) { return '<button class="' + (cur === v ? 'sel' : '') + '" onclick="setT(\'' + k + '\',\'' + v + '\')">' + v + '</button>'; }).join('') +
-      '<label class="tin ' + (custom ? 'sel' : '') + '">✎ <input type="time" value="' + (custom ? cur : '') + '" onchange="if(this.value)setT(\'' + k + '\',this.value)"></label></div>';
+      '<label class="tin ' + (custom ? 'sel' : '') + '">✎ <input type="time" value="' + (custom ? cur : '') + '" oninput="PEND.' + k + '=this.value"><button onclick="commit(\'' + k + '\')">決定</button></label></div>';
   }
   function render() {
     document.getElementById('form').innerHTML =
@@ -55,13 +58,14 @@
       '<div class="set ' + (S.same ? 'off' : '') + '"><div class="lbl">報告をお願いする時間</div>' + chips('report') + '</div>';
     document.getElementById('save').disabled = false;
   }
-  function setT(k, v) { S[k] = v; render(); }
-  function toggle() { S.same = !S.same; render(); }
+  function sync() { if (S.same) S.report = S.todo; }   // まとめて送る間は、報告の時間も、やることの時間と同じにする（表も、そろえる）
+  function setT(k, v) { touched = true; S[k] = v; sync(); render(); }
+  function toggle() { touched = true; S.same = !S.same; sync(); render(); }
 
   document.getElementById('save').onclick = function () {
     var b = this, m = document.getElementById('msg'); b.disabled = true; m.className = ''; m.textContent = '保存中…';
     post({ source: 'settings_set', userId: profile.userId, name: profile.displayName, settings: S })
-      .then(function (j) { if (!j.ok) throw new Error(j.error); m.textContent = '保存しました。次の通知から、この時間になります。'; b.disabled = false; })
+      .then(function (j) { if (!j.ok) throw new Error(j.error); m.textContent = '保存しました。次の通知から、この時間になります。'; b.disabled = false; try { localStorage.setItem('plan_settings', JSON.stringify(S)); } catch (x) {} })
       .catch(function (e) { m.className = 'err'; m.textContent = 'エラー：' + e.message; b.disabled = false; });
   };
 
@@ -69,7 +73,15 @@
     if (!liff.isLoggedIn()) { liff.login(); return; }
     return liff.getProfile().then(function (p) {
       profile = p;
-      return post({ source: 'settings_get', userId: p.userId }).then(function (j) { if (!j.ok) throw new Error(j.error); S = j.settings; render(); });
+      // 前に保存した設定を、先に表示して、あとから、最新の内容に差し替える（表示を、速く見せるため）
+      try { var c = JSON.parse(localStorage.getItem('plan_settings') || 'null'); if (c) { S = c; sync(); render(); } } catch (x) {}
+      if (!S) document.getElementById('msg').textContent = '読み込み中…';
+      return post({ source: 'settings_get', userId: p.userId }).then(function (j) {
+        if (!j.ok) throw new Error(j.error);
+        document.getElementById('msg').textContent = '';
+        if (!touched) { S = j.settings; sync(); render(); }
+        try { localStorage.setItem('plan_settings', JSON.stringify(j.settings)); } catch (x) {}
+      });
     });
   }).catch(function (e) { var m = document.getElementById('msg'); m.className = 'err'; m.textContent = 'エラー：' + e.message; });
 </script>
