@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>学習計画</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root { --acc:#f28c28; --acc-bg:#fdeedd; --line:#e8e8e8; --ink:#2b2b2b; --sub:#888; --bg:#eef0f3; --ok:#2e9e5b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); font-family:"Hiragino Sans","Noto Sans JP",sans-serif; color:var(--ink); font-size:15px; line-height:1.5; }
+  .wrap { display:flex; justify-content:center; padding:20px; }
+  .phone { width:390px; height:820px; background:#fff; border-radius:28px; border:8px solid #222; display:flex; flex-direction:column; overflow:hidden; flex:none; position:relative; }
+  @media (max-width:820px) { .phone { width:100%; height:100vh; border:0; border-radius:0; } .wrap { padding:0; } }
+
+  .top { padding:10px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px; }
+  .top b { flex:1; font-size:16px; }
+  .who { font-size:12px; border:1px solid var(--line); border-radius:12px; padding:2px 8px; background:#fafafa; }
+  .mockpill { display:none !important; }
+  .mockpill_ { font-size:10px; color:#b26a00; background:var(--acc-bg); border-radius:10px; padding:2px 8px; border:0; }
+  .body { flex:1; overflow-y:auto; }
+  .tabbar { display:flex; border-top:1px solid var(--line); }
+  .tabbar button { flex:1; border:0; background:#fff; padding:8px 2px 10px; font-size:11px; color:var(--sub); }
+  .tabbar button b { display:block; font-size:17px; line-height:1.2; }
+  .tabbar button.on { color:var(--acc); font-weight:bold; }
+  .toast { position:absolute; left:50%; bottom:80px; transform:translateX(-50%); background:#333; color:#fff; font-size:13px; padding:8px 16px; border-radius:18px; }
+
+  .chat { padding:14px 14px 20px; display:flex; flex-direction:column; gap:9px; }
+  .bot,.me { max-width:86%; padding:9px 12px; border-radius:14px; font-size:14px; }
+  .bot { background:#f1f2f4; align-self:flex-start; border-top-left-radius:4px; }
+  .me { background:var(--acc); color:#fff; align-self:flex-end; border-top-right-radius:4px; }
+  .prev { align-self:flex-start; max-width:92%; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font-size:13px; background:#fff; }
+  .prev h5 { margin:0 0 4px; font-size:12px; color:var(--sub); font-weight:normal; } .prev b { font-size:14px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  .chips button { border:1px solid var(--acc); color:#b26a00; background:#fff; border-radius:16px; padding:7px 13px; font-size:13px; }
+  .chips button.sel { background:var(--acc); color:#fff; }
+  .big { display:block; width:calc(100% - 28px); margin:6px 14px 18px; padding:13px; border:0; border-radius:12px; background:var(--acc); color:#fff; font-size:15px; font-weight:bold; }
+  .big.ghost { background:#fff; color:#b26a00; border:1px solid var(--acc); margin:0 14px 10px; }
+
+  .date { padding:12px 14px 2px; font-size:13px; color:var(--sub); } .date b { font-size:19px; color:var(--ink); margin-right:6px; }
+  .strip { display:flex; gap:4px; padding:6px 10px 10px; }
+  .strip button { flex:1; border:1px solid var(--line); background:#fff; border-radius:10px; padding:5px 0; font-size:11px; color:var(--sub); line-height:1.3; }
+  .strip button b { display:block; font-size:14px; color:var(--ink); } .strip button.sel { border-color:var(--acc); background:var(--acc-bg); } .strip button.today b { color:var(--acc); } .strip small { display:block; font-size:10px; height:12px; }
+  .task { display:flex; gap:11px; margin:0 14px 9px; padding:13px; border:1px solid var(--line); border-radius:12px; }
+  .task.tap { cursor:pointer; border-color:var(--acc); }
+  .task.done { background:#f5faf7; border-color:#cfe9d9; }
+  .task.half { background:#fffaf0; border-color:#f3d9a8; } .task.half .box2 { border-color:#f0a030; background:linear-gradient(90deg,#f0a030 50%,#fff 50%); }
+  .task.skip { background:#fafafa; } .task.skip .box2 { border-color:#bbb; color:#bbb; }
+  .box2 { width:22px; height:22px; border:2px solid var(--acc); border-radius:7px; flex:none; margin-top:2px; text-align:center; color:#fff; font-size:14px; line-height:18px; }
+  .task.done .box2 { background:var(--ok); border-color:var(--ok); }
+  .t1 { font-size:12px; color:var(--sub); } .t2 { font-size:15px; font-weight:bold; } .t3 { font-size:13px; color:#555; }
+  .rest { margin:0 14px; padding:13px; background:#f3f4f6; border-radius:12px; color:var(--sub); font-size:14px; }
+  .rp { margin:-4px 14px 10px; padding:12px; border:1px solid var(--acc); border-radius:12px; background:#fffaf4; }
+  .rp .q { font-size:13px; margin-bottom:8px; } .rp .chips button { padding:6px 11px; font-size:12px; }
+  .rp .inp { display:flex; gap:6px; margin-top:10px; align-items:center; font-size:13px; } .rp input { flex:1; min-width:0; border:1px solid var(--acc); border-radius:8px; padding:8px; font-size:14px; } .rp .inp button { border:0; background:var(--acc); color:#fff; border-radius:8px; padding:8px 14px; font-size:13px; }
+  .tm { margin:6px 14px 18px; padding:13px; border:1px solid var(--line); border-radius:12px; } .tm h4 { margin:0 0 8px; font-size:14px; } .tm .chips button { padding:6px 11px; font-size:12px; }
+
+  .plans { display:flex; gap:6px; padding:10px 14px 0; flex-wrap:wrap; }
+  .plans button { border:1px solid var(--line); background:#fff; border-radius:16px; padding:6px 12px; font-size:12px; color:#555; }
+  .plans button.sel { border-color:var(--acc); background:var(--acc-bg); color:#b26a00; font-weight:bold; }
+  .plans small { color:var(--sub); font-weight:normal; margin-left:3px; }
+  .pause { margin:10px 14px 0; padding:9px 12px; background:#f3f4f6; border-radius:10px; font-size:13px; color:#555; }
+  .ach { margin:10px 14px 0; padding:11px 13px; border:1px solid var(--line); border-radius:12px; font-size:13px; }
+  .ach .r { display:flex; align-items:center; gap:8px; margin-top:5px; } .ach .r i { font-style:normal; width:58px; color:var(--sub); font-size:12px; flex:none; }
+  .bar { flex:1; height:8px; background:#eee; border-radius:4px; overflow:hidden; } .bar span { display:block; height:100%; background:var(--acc); } .ach .r em { font-style:normal; width:36px; text-align:right; font-size:12px; }
+  .sum { padding:11px 14px; font-size:13px; color:#555; border-bottom:1px solid var(--line); margin-top:10px; } .sum b { color:var(--ink); } .ok { color:var(--ok); font-weight:bold; }
+  table.rd { width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed; }
+  table.rd th { background:var(--acc-bg); padding:6px; font-size:12px; }
+  table.rd td { border-bottom:1px solid var(--line); padding:7px 8px; vertical-align:top; }
+  table.rd td.m { width:52px; text-align:center; font-weight:bold; background:#fafafa; color:#555; } table.rd tr.now td.m { background:var(--acc); color:#fff; }
+  table.rd td.ph { background:#fff9f2; color:#b26a00; font-size:11px; padding:4px 10px; }
+  .pv { font-size:10px; background:#fff0cc; color:#8a6d00; border-radius:6px; padding:0 4px; margin-left:3px; } .fin { color:var(--ok); font-weight:bold; }
+  .wk { margin:10px 14px 0; font-weight:bold; font-size:13px; color:#b26a00; }
+  .ln { display:flex; margin:0 14px; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; } .ln i { width:74px; font-style:normal; color:var(--sub); flex:none; } .ln.goal { background:var(--acc); color:#fff; border-radius:8px; padding:7px 8px; margin-top:6px; } .ln.goal i { color:#fff; }
+  .leg { padding:8px 14px 14px; font-size:11px; color:var(--sub); }
+  .acts { padding-top:4px; }
+  .line { background:#a9bcd8; min-height:100%; padding:14px 12px 20px; display:flex; flex-direction:column; gap:10px; }
+  .ldate { align-self:center; font-size:11px; color:#fff; background:rgba(0,0,0,.25); border-radius:10px; padding:2px 10px; }
+  .lrow { display:flex; gap:6px; align-items:flex-end; } .lrow.me { justify-content:flex-end; }
+  .lav { width:34px; height:34px; border-radius:50%; background:var(--acc); color:#fff; font-size:10px; font-weight:bold; display:flex; align-items:center; justify-content:center; flex:none; align-self:flex-start; }
+  .lcard { background:#fff; border-radius:14px; width:78%; overflow:hidden; font-size:14px; }
+  .lcard .lh { padding:10px 14px 4px; font-weight:bold; } .lcard .lb { padding:2px 14px 10px; color:#444; font-size:13px; }
+  .lcard .lt { padding:3px 14px; font-size:13px; } .lcard .lt i { font-style:normal; color:var(--sub); font-size:11px; margin-right:6px; }
+  .lcard button { display:block; width:100%; border:0; border-top:1px solid #eee; background:#fff; color:#2f7de1; padding:11px; font-size:14px; }
+  .lcard button.g { color:#06a24b; font-weight:bold; }
+  .ltime { font-size:10px; color:#fff; align-self:flex-end; }
+  .lme { background:#8de055; border-radius:14px; padding:8px 14px; font-size:14px; max-width:70%; }
+  .lbot { background:#fff; border-radius:14px; padding:8px 14px; font-size:14px; max-width:78%; }
+  .tin { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--acc); border-radius:16px; padding:3px 10px; font-size:12px; color:#b26a00; background:#fff; }
+  .tin input { border:0; background:transparent; font-size:12px; color:inherit; font-family:inherit; width:74px; outline:none; }
+  .tin.sel { background:var(--acc); color:#fff; } .tin.sel input { color:#fff; }
+  .tin button { border:0; background:var(--acc); color:#fff; border-radius:10px; padding:3px 8px; font-size:12px; }
+  .tin.sel button { background:#fff; color:#b26a00; }
+  .sec { margin:14px 14px 0; font-weight:bold; font-size:13px; color:#b26a00; }
+  .set { margin:6px 14px 0; padding:12px 13px; border:1px solid var(--line); border-radius:12px; }
+  .set .lbl { font-size:13px; color:#555; margin-bottom:6px; } .set .chips button { padding:6px 11px; font-size:12px; }
+  .sw2 { display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+  .tg { width:44px; height:26px; border-radius:13px; background:#ccc; position:relative; border:0; padding:0; } .tg::after { content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:.15s; } .tg.on { background:var(--ok); } .tg.on::after { left:21px; }
+  .set.off { opacity:.4; pointer-events:none; }
+  .edit { margin:0 14px 10px; border:1px solid var(--line); border-radius:12px; padding:14px; font-size:15px; display:flex; justify-content:space-between; } .edit span { color:var(--sub); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="phone" id="phone">
+    <div class="top"><b id="ttl">学習計画</b><span class="who">Sさん ▾</span><button class="mockpill" onclick="toggleLine()" id="lbtn">LINE</button><button class="mockpill" onclick="reset()">最初から</button></div>
+    <div class="body" id="body"></div>
+    <div class="tabbar" id="tabs"></div>
+  </div>
+</div>
+
+<script>
+// ---------- データ（受験逆算＝教材マスタ・ルートマスタの実データ。帯3の英語・数学） ----------
+var ROUTE = {
+  '英語': [ { name:'システム英単語', total:2027, unit:'語', pace:300 }, { name:'英文解釈の技術100', total:100, unit:'題', pace:20 }, { name:'英語長文ポラリス1', total:12, unit:'題', pace:4 }, { name:'The Rules 英語長文3', total:12, unit:'題', pace:3 }, { name:'CanPass英語', total:20, unit:'題', pace:5 }, { name:'志望校別過去問', weeks:8, prov:true } ],
+  '数学': [ { name:'基礎問題精講 Ⅰ・A', total:145, unit:'題', pace:40 }, { name:'CanPass数学', total:120, unit:'題', pace:24 }, { name:'重要問題集 理系', total:300, unit:'題', pace:24 }, { name:'志望校別過去問', weeks:8, prov:true } ]
+};
+var POLICY = [ { from:'2027-04', to:'2027-07', text:'共テ5%・2次95%｜基礎を完了→標準へ' }, { from:'2027-08', to:'2027-10', text:'共テ20%・2次80%｜標準を完成、応用の頻出と2次記述' }, { from:'2027-11', to:'2027-12', text:'共テ70%・2次30%｜共テ対策がメイン' }, { from:'2028-01', to:'2028-01', text:'共テ95%｜共テ特化' }, { from:'2028-02', to:'2028-02', text:'共テ後｜2次の過去問に専念' } ];
+var TEST_WEEK = [ ['数学','学校の数学ワーク','p.42〜43'],['数学','学校の数学ワーク','p.44〜47'],['数学','学校の数学ワーク','p.48〜49'],['数学','学校の数学ワーク','p.50〜53'],['英語','英語ワーク','p.30'],['英語','英語ワーク','p.31〜35'] ];
+var TEST_PLAN = [
+  ['1週目 11/9〜', [['11/9（月）','数学ワーク p.42〜43'],['11/10（火）','数学ワーク p.44〜47'],['11/11（水）','数学ワーク p.48〜49'],['11/12（木）','数学ワーク p.50〜53'],['11/13（金）','英語ワーク p.30'],['11/14（土）','英語ワーク p.31〜35'],['11/15（日）','予備日']]],
+  ['2週目 11/16〜', [['11/16（月）','行事：部活の大会'],['11/17（火）','英語ワーク p.36〜37'],['11/18（水）','理科 電流 p.18〜19'],['11/19（木）','理科 電流 p.20〜21'],['11/22（日）','予備日']]],
+  ['3週目 11/23〜', [['11/26（木）','前日：見直しだけ'],['11/27（金）','期末テスト']]]
+];
+var NAMES = { juken:'大学受験', test:'期末テスト' };
+var TYPES = [['juken','大学受験'],['test','定期テスト'],['kensho','検定'],['habit','習慣づくり'],['task','課題・タスク']];
+var SCRIPT = {
+  juken:[['志望校（大学・学部）を教えてください。','筑波大学 理工学群'],['直近の模試と、英語の偏差値は？','河合・55'],['週に勉強に使える時間は？（部活・塾を除く）','週15時間'],['手持ちの教材はありますか？','ない']],
+  test:[['次の定期テストの名前と、始まる日は？','期末テスト・11/27'],['いちばん上げたい科目と、目標の点数は？','数学・70点'],['教材と、終わらせたい範囲は？','学校の数学ワーク p.42〜60'],['曜日ごとの勉強時間は？','月30分・火60分… 日曜は予備日']]
+};
+var PREV_Q = ['前回は、計画の80%まで進みました。今回の勉強時間は、前回（週15時間）に合わせますか？', '前回と同じ'];
+var START = '2026-11', EXAM = '2028-02', DAYS = ['月','火','水','木','金','土','日'];
+
+var S, TM = null, TT = null;
+function fresh() { return { view:'app', log:[], notify:{ todo:'07:00', report:'20:00', same:false, wd:'日', wt:'20:00' }, tab:'chat', created:false, adding:false, type:null, plans:[], act:null, cur:null, sel:2, done:{}, res:{}, open:null, ko:false, time:null, step:0, toast:'' }; }
+S = fresh();
+
+function f() { return 15 / 30; }
+function weeksOf(it) { return it.weeks ? it.weeks / f() : Math.ceil(it.total / it.pace / f()); }
+function layout(sub) { var t = 0; return ROUTE[sub].map(function (it) { var w = weeksOf(it), x = { it:it, s:t, e:t + w }; t += w; return x; }); }
+function months(a, b) { var o = [], y = +a.slice(0,4), m = +a.slice(5), ey = +b.slice(0,4), em = +b.slice(5); while (y < ey || (y === ey && m <= em)) { o.push(y + '-' + (m<10?'0':'') + m); m++; if (m > 12) { m = 1; y++; } } return o; }
+function cell(lay, i) { var ws = i * 4.3, we = (i + 1) * 4.3, out = []; lay.forEach(function (x) { if (x.e > ws && x.s < we) out.push(x.it.name + (x.it.prov ? '<span class="pv">仮</span>' : '') + (x.e <= we ? ' <span class="fin">✓</span>' : '')); }); return out.join('<br>') || '<span style="color:#ccc">—</span>'; }
+function jukenDay(d) {
+  if (d === 6) return [];
+  var out = [];
+  ['英語', '数学'].forEach(function (sub) {
+    var it = ROUTE[sub][0], tot = Math.round(it.pace * f()), base = Math.floor(tot / 6), rem = tot % 6, at = 0;
+    for (var k = 0; k < d; k++) at += base + (k < rem ? 1 : 0);
+    var n = base + (d < rem ? 1 : 0);
+    out.push({ sub:sub, name:it.name, a:at + 1, b:at + n, unit:it.unit });
+  });
+  return out;
+}
+function testDay(d) { if (d > 5) return []; var t = TEST_WEEK[d]; return [{ sub:t[0], name:t[1], text:t[2] }]; }
+function tasksFor(d) { return S.act === 'test' ? testDay(d) : jukenDay(d); }
+function planOf(id) { return S.plans.filter(function (p) { return p.id === id; })[0]; }
+function key(d, k) { return S.act + '_' + d + '_' + k; }
+
+// ---------- 操作 ----------
+function setTab(t) { S.tab = t; S.adding = false; if (t === 'plan' && S.act) S.cur = S.cur || S.act; render(); }
+function newPlan() { clearTimeout(TM); S.adding = true; S.type = null; S.step = 0; S.tab = 'chat'; render(); }
+function pickType(t) {
+  clearTimeout(TM); S.type = t; S.step = 0; render();
+  var n = SCRIPT[t] ? (SCRIPT[t].length + (S.adding ? 1 : 0)) * 2 : 0;
+  (function go() { if (S.step < n && (!S.created || S.adding)) { TM = setTimeout(function () { S.step++; render(); go(); }, 650); } })();
+}
+function create() {
+  var id = S.type;
+  S.plans.forEach(function (p) { if (p.id !== id) { p.status = 'paused'; p.resume = id === 'test' ? '11/28' : ''; } });
+  var p = planOf(id); if (!p) S.plans.push({ id:id, status:'active' }); else { p.status = 'active'; p.resume = ''; }
+  S.act = id; S.cur = id; S.created = true; S.adding = false; S.open = null; S.tab = 'today'; render();
+}
+function activate(id) { S.plans.forEach(function (p) { p.status = p.id === id ? 'active' : 'paused'; p.resume = p.id === id ? '' : '再開待ち'; }); S.act = id; S.cur = id; S.tab = 'plan'; render(); }
+function pickPlan(id) { S.cur = id; render(); }
+function pick(i) { S.sel = i; S.open = null; render(); }
+function openTask(k) { S.open = S.open === k ? null : k; S.ko = false; render(); }
+function setRes(k, v) { var kk = key(2, k); S.res[kk] = v; if (v === '予定どおり') S.done[kk] = 1; else delete S.done[kk]; S.open = null; S.ko = false; render(); }
+function koDo() { S.ko = true; render(); document.getElementById('pos').focus(); }
+function savePos(k, unit) { var v = document.getElementById('pos').value.trim(); if (v) setRes(k, v + unit + 'まで'); }
+function recTime(v) { S.time = v; render(); }
+function pdf() { S.toast = 'PDFを保存しました'; render(); clearTimeout(TT); TT = setTimeout(function () { S.toast = ''; render(); }, 1600); }
+function toggleLine() {
+  if (S.view === 'line') { S.view = 'app'; render(); return; }
+  if (!S.created) { S.plans = [{ id:'juken', status:'active' }]; S.act = 'juken'; S.cur = 'juken'; S.created = true; S.adding = false; S.tab = 'today'; }
+  S.view = 'line'; render();
+}
+function lineAnswer(v) {
+  tasksFor(2).forEach(function (t, k) { var kk = key(2, k); S.res[kk] = v; if (v === '予定どおり') S.done[kk] = 1; else delete S.done[kk]; });
+  S.log.push(v); render();
+}
+function lineOpenApp(openInput) { S.view = 'app'; S.tab = 'today'; S.sel = 2; S.open = openInput ? 0 : null; S.ko = !!openInput; render(); if (openInput) { var e = document.getElementById('pos'); if (e) e.focus(); } }
+var PEND = {};
+function setN(k, v) { S.notify[k] = v; if (S.notify.same && k === 'todo') S.notify.report = v; render(); }
+function toggleSame() { S.notify.same = !S.notify.same; if (S.notify.same) S.notify.report = S.notify.todo; render(); }
+function reset() { clearTimeout(TM); S = fresh(); render(); }
+
+// ---------- 画面 ----------
+function render() {
+  var tabs = [['today','📅','今日'],['plan','📋','計画']];
+  var inLine = S.view === 'line';
+  document.getElementById('lbtn').textContent = inLine ? 'アプリ' : 'LINE';
+  document.getElementById('tabs').innerHTML = S.created && !inLine ? tabs.map(function (t) { return '<button class="' + ((S.tab === t[0] || (t[0] === 'plan' && (S.tab === 'edit' || S.tab === 'notify'))) ? 'on' : '') + '" onclick="setTab(\'' + t[0] + '\')"><b>' + t[1] + '</b>' + t[2] + '</button>'; }).join('') : '';
+  document.getElementById('ttl').textContent = inLine ? 'トウコベ' : (S.created ? { today:'今日', plan:'計画', edit:'計画を直す', chat:'新しい計画', notify:'通知の設定' }[S.tab] : '学習計画');
+  var el = document.getElementById('body');
+  el.innerHTML = inLine ? lineView() : (!S.created || S.adding ? chat() : (S.tab === 'today' ? today() : S.tab === 'plan' ? plan() : S.tab === 'notify' ? notifyView() : edit()));
+  el.scrollTop = inLine || !(S.created && !S.adding) ? el.scrollHeight : 0;
+  var old = document.querySelector('.toast'); if (old) old.remove();
+  if (S.toast) { var t = document.createElement('div'); t.className = 'toast'; t.textContent = S.toast; document.getElementById('phone').appendChild(t); }
+}
+
+function chat() {
+  var names = {}; TYPES.forEach(function (t) { names[t[0]] = t[1]; });
+  var h = '<div class="chat">';
+  if (S.adding) h += '<div class="prev"><h5>前回の記録</h5><b>大学受験　達成率 80%</b><br>英語 システム英単語 50語まで<br>数学 基礎問題精講 Ⅰ・A 8題まで</div>';
+  h += '<div class="bot">' + (S.adding ? '新しい計画をつくります。どんな計画にしますか？' : 'こんにちは。学習計画をつくります。どんな計画にしますか？') + '</div>';
+  if (!S.type) h += '<div class="chips">' + TYPES.map(function (t) { return '<button onclick="pickType(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '</div>';
+  else {
+    h += '<div class="me">' + names[S.type] + '</div>';
+    var sc = SCRIPT[S.type];
+    if (sc) { var list = (S.adding ? [PREV_Q] : []).concat(sc); list.forEach(function (qa, i) { if (S.step > i * 2) h += '<div class="bot">' + qa[0] + '</div>'; if (S.step > i * 2 + 1) h += '<div class="me">' + qa[1] + '</div>'; }); }
+  }
+  h += '</div>';
+  var n = SCRIPT[S.type] ? (SCRIPT[S.type].length + (S.adding ? 1 : 0)) * 2 : -1;
+  if (S.step >= n && n > 0) h += '<button class="big" onclick="create()">計画をつくる</button>';
+  return h;
+}
+
+function today() {
+  var d = S.sel, ts = tasksFor(d), rest = d === 6, isToday = d === 2;
+  var strip = DAYS.map(function (n, i) {
+    var all = tasksFor(i).length, dn = tasksFor(i).filter(function (_, k) { return S.done[key(i, k)]; }).length;
+    return '<button class="' + (i === d ? 'sel ' : '') + (i === 2 ? 'today' : '') + '" onclick="pick(' + i + ')">' + n + '<b>' + (9 + i) + '</b><small>' + (i === 6 ? '予備' : (i < 2 ? '✓' : (dn === all && all && i === 2 ? '✓' : (i === 2 ? '今日' : '')))) + '</small></button>';
+  }).join('');
+  var opts = ['予定どおり', 'ここまで…', 'やらなかった'];
+  var list = rest ? '<div class="rest">予備日です。遅れた分があれば、ここで取り戻します。</div>' :
+    ts.map(function (t, k) {
+      var on = d < 2 || S.done[key(d, k)], res = S.res[key(d, k)];
+      var amt = t.text ? t.text : (t.a + '〜' + t.b + t.unit), unit = t.text ? '' : t.unit, ph = t.text ? 'p.46' : '60';
+      var kind = res && !on ? (res === 'やらなかった' ? 'skip ' : 'half ') : '';
+      var card = '<div class="task ' + (on ? 'done ' : '') + kind + (isToday ? 'tap' : '') + '"' + (isToday ? ' onclick="openTask(' + k + ')"' : '') + '><div class="box2">' + (on ? '✓' : (kind === 'skip ' ? '×' : '')) + '</div><div><div class="t1">' + t.sub + '</div><div class="t2">' + t.name + '</div><div class="t3">' + amt + (res ? '　<b style="color:' + (on ? 'var(--ok)' : kind === 'skip ' ? 'var(--sub)' : '#c77a00') + '">' + (on ? '✓ ' : '') + res + '</b>' : '') + '</div></div></div>';
+      if (isToday && S.open === k) {
+        card += '<div class="rp"><div class="q">どこまでできましたか？</div><div class="chips">' + opts.map(function (o) { return '<button class="' + (o === 'ここまで…' && S.ko ? 'sel' : '') + '" onclick="' + (o === 'ここまで…' ? 'koDo()' : 'setRes(' + k + ',\'' + o + '\')') + '">' + o + '</button>'; }).join('') + '</div>' +
+          (S.ko ? '<div class="inp"><input id="pos" inputmode="' + (t.text ? 'text' : 'numeric') + '" placeholder="例：' + ph + '"><span>' + unit + 'まで</span><button onclick="savePos(' + k + ',\'' + unit + '\')">記録</button></div>' : '') + '</div>';
+      }
+      return card; }).join('');
+  var tm = ['30分', '1時間', '1時間半', '2時間', 'それ以上'];
+  var time = isToday && !rest ? '<div class="tm"><h4>今日の勉強時間</h4><div class="chips">' + tm.map(function (o) { return '<button class="' + (S.time === o ? 'sel' : '') + '" onclick="recTime(\'' + o + '\')">' + o + '</button>'; }).join('') + '</div></div>' : '';
+  return '<div class="date"><b>11月11日（水）</b>' + (S.act === 'test' ? '期末テストまで あと16日' : '今週のやること') + '</div><div class="strip">' + strip + '</div>' + list + time;
+}
+
+function plan() {
+  var id = S.cur || S.act, p = planOf(id), paused = p && p.status === 'paused';
+  var h = '';
+  if (S.plans.length > 1) h += '<div class="plans">' + S.plans.map(function (q) { return '<button class="' + (q.id === id ? 'sel' : '') + '" onclick="pickPlan(\'' + q.id + '\')">' + NAMES[q.id] + (q.status === 'paused' ? '<small>停止中</small>' : '') + '</button>'; }).join('') + '</div>';
+  if (paused) h += '<div class="pause">一時停止中' + (p.resume && p.resume !== '再開待ち' ? '　' + p.resume + 'から自動で再開' : '') + '</div>';
+  if (id === 'juken') h += '<div class="ach"><b>達成率 80%</b><div class="r"><i>先週</i><div class="bar"><span style="width:80%"></span></div><em>80%</em></div><div class="r"><i>先々週</i><div class="bar"><span style="width:60%"></span></div><em>60%</em></div></div>';
+  if (id === 'test') h += '<div class="sum"><b>期末テスト 11/27</b>　目標：数学70点（前回52点）</div>' +
+      TEST_PLAN.map(function (w) { return '<div class="wk">' + w[0] + '</div>' + w[1].map(function (l) { return '<div class="ln ' + (l[1] === '期末テスト' ? 'goal' : '') + '"><i>' + l[0] + '</i><span>' + l[1] + '</span></div>'; }).join(''); }).join('') + '<div class="leg">テスト当日までの日割り表です。前日は、見直しだけです。</div>';
+  else {
+    var st = paused ? '2026-12' : START;
+    var A = layout('英語'), M = layout('数学'), ms = months(st, EXAM), total = Math.max(A[A.length - 1].e, M[M.length - 1].e), slack = Math.round(ms.length * 4.3 - total);
+    var rows = ms.map(function (m, i) {
+      var pol = POLICY.filter(function (q) { return m >= q.from && m <= q.to; })[0], prev = ms[i - 1], np = pol && !(prev && prev >= pol.from && prev <= pol.to);
+      return (np ? '<tr><td colspan="3" class="ph">' + pol.text + '</td></tr>' : '') + '<tr class="' + (i === 0 ? 'now' : '') + '"><td class="m">' + (+m.slice(5)) + '月' + (m.slice(5) === '01' || i === 0 ? '<br><small style="font-weight:normal">' + m.slice(0, 4) + '</small>' : '') + '</td><td>' + cell(A, i) + '</td><td>' + cell(M, i) + '</td></tr>';
+    }).join('');
+    h += '<div class="sum"><b>筑波大学 理工学群</b>（帯3）・2028年2月まで　余裕 <span class="ok">あと約' + slack + '週</span></div><table class="rd"><tr><th></th><th>英語</th><th>数学</th></tr>' + rows + '</table><div class="leg">✓＝その月に終わる　仮＝量が分からず仮置き</div>';
+  }
+  return h + '<div class="acts"><button class="big ghost" onclick="pdf()">PDFでダウンロード</button><button class="big ghost" onclick="setTab(\'edit\')">計画を直す</button><button class="big ghost" onclick="setTab(\'notify\')">通知の設定</button><button class="big ghost" onclick="newPlan()">＋ 新しい計画をつくる</button></div>';
+}
+
+var WD = ['月','火','水','木','金','土','日'];
+function lineTasks() { return tasksFor(2).map(function (t) { return '<div class="lt"><i>' + t.sub + '</i>' + t.name + '　' + (t.text ? t.text : t.a + '〜' + t.b + t.unit) + '</div>'; }).join(''); }
+function lineView() {
+  var n = S.notify, wi = WD.indexOf(n.wd), wdate = wi <= 2 ? 9 + wi : wi + 2;
+  var av = '<div class="lav">トウコベ</div>';
+  var todoBtns = '<button onclick="lineOpenApp(false)">アプリで開く</button>';
+  var repBtns = '<button class="g" onclick="lineAnswer(\'予定どおり\')">予定どおり</button><button class="g" onclick="lineAnswer(\'やらなかった\')">やらなかった</button><button onclick="lineOpenApp(true)">どこまで進んだか入力する</button>';
+  var h = '<div class="line">';
+  h += '<div class="ldate">11月' + wdate + '日（' + n.wd + '）</div>';
+  h += '<div class="lrow">' + av + '<div class="lcard"><div class="lh">今週の計画の確認</div><div class="lb">新しい計画の作成や、修正はありませんか？</div><button onclick="lineOpenApp(false)">計画を開く</button></div><div class="ltime">' + n.wt + '</div></div>';
+  h += '<div class="ldate">11月11日（水）</div>';
+  if (n.same) {
+    h += '<div class="lrow">' + av + '<div class="lcard"><div class="lh">今日のやること</div>' + lineTasks() + '<div class="lb" style="padding-top:8px">できたら、報告してください。</div>' + repBtns + '</div><div class="ltime">' + n.todo + '</div></div>';
+  } else {
+    h += '<div class="lrow">' + av + '<div class="lcard"><div class="lh">今日のやること</div>' + lineTasks() + '<div style="height:8px"></div>' + todoBtns + '</div><div class="ltime">' + n.todo + '</div></div>';
+    h += '<div class="lrow">' + av + '<div class="lcard"><div class="lh">今日の報告をお願いします</div><div class="lb">どこまでできましたか？</div>' + repBtns + '</div><div class="ltime">' + n.report + '</div></div>';
+  }
+  S.log.forEach(function (v) { h += '<div class="lrow me"><div class="lme">' + v + '</div></div><div class="lrow">' + av + '<div class="lbot">記録しました。おつかれさまでした。</div></div>'; });
+  return h + '</div>';
+}
+function timeChips(k, list) {
+  var cur = S.notify[k], custom = list.indexOf(cur) < 0;
+  return '<div class="chips">' + list.map(function (v) { return '<button class="' + (cur === v ? 'sel' : '') + '" onclick="setN(\'' + k + '\',\'' + v + '\')">' + v + '</button>'; }).join('') +
+    '<label class="tin ' + (custom ? 'sel' : '') + '">✎ <input type="time" value="' + (custom ? cur : '') + '" oninput="PEND.' + k + '=this.value"><button onclick="if(PEND.' + k + ')setN(\'' + k + '\',PEND.' + k + ')">決定</button></label></div>';
+}
+function notifyView() {
+  var n = S.notify, T = ['06:30','07:00','08:00','12:00','17:00','18:00','20:00','21:00','22:00'];
+  return '<div class="sec">毎日</div>' +
+    '<div class="set"><div class="lbl">今日のやることを送る時間</div>' + timeChips('todo', T) + '</div>' +
+    '<div class="set"><div class="sw2"><span>やることと報告を、まとめて送る</span><button class="tg ' + (n.same ? 'on' : '') + '" onclick="toggleSame()"></button></div></div>' +
+    '<div class="set ' + (n.same ? 'off' : '') + '"><div class="lbl">報告をお願いする時間</div>' + timeChips('report', T) + '</div>' +
+    '<div class="sec">毎週</div>' +
+    '<div class="set"><div class="lbl">計画の確認をお願いする曜日</div><div class="chips">' + WD.map(function (d) { return '<button class="' + (n.wd === d ? 'sel' : '') + '" onclick="setN(\'wd\',\'' + d + '\')">' + d + '</button>'; }).join('') + '</div></div>' +
+    '<div class="set"><div class="lbl">時間</div>' + timeChips('wt', T) + '</div><div style="height:18px"></div>';
+}
+
+function edit() {
+  var p = planOf(S.cur || S.act), paused = p && p.status === 'paused';
+  return '<div class="date"><b>' + NAMES[S.cur || S.act] + '</b></div>' +
+    '<div class="edit">条件を変える<span>›</span></div>' +
+    '<div class="edit">今日は休む・明日に回す<span>›</span></div>' +
+    '<div class="edit">日ごとのやることを直す<span>›</span></div>' +
+    (paused ? '<div class="edit" style="border-color:var(--acc);color:#b26a00" onclick="activate(\'' + p.id + '\')">この計画を再開する<span>›</span></div>' : '');
+}
+
+var hh = (location.hash || '').slice(1);
+if (hh) {
+  S.type = 'juken';
+  var two = hh === 'paused' || hh === 'testtoday' || hh === 'testplan' || hh === 'testopen';
+  S.plans = two ? [{ id:'juken', status:'paused', resume:'11/28' }, { id:'test', status:'active' }] : [{ id:'juken', status:'active' }];
+  S.act = two ? 'test' : 'juken'; S.cur = hh === 'paused' ? 'juken' : S.act;
+  S.created = hh !== 'chat';
+  S.tab = ({ today:'today', plan:'plan', edit:'edit', testtoday:'today', testplan:'plan', paused:'plan', open:'today', open2:'today', testopen:'today', add:'chat', notify:'notify', line:'today' })[hh] || 'chat';
+  if (hh === 'chat') { S.step = 99; S.type = 'juken'; S.plans = []; S.act = null; }
+  if (hh === 'add') { S.adding = true; S.type = 'test'; S.step = 99; }
+  if (hh === 'line') S.view = 'line';
+  if (hh.indexOf('open') >= 0) { S.open = 0; S.ko = hh === 'open2'; }
+}
+render();
+
+// ================= LIFF版：LINEログインと、GAS（シート）への接続 =================
+var LIFF_ID = '2012504695-oSmM1JBO';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbw4UACUX9iF7v09H6gcsfct7XXvyrlYMA2C1HnOKQFirHL3604BkVITIIczcXldfmNF/exec';
+var ME = null, ST = null;
+
+function gas(o) { return fetch(GAS_URL, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify(o) }).then(function (r) { return r.json(); }); }
+function flash(msg) { S.toast = msg; render(); clearTimeout(TT); TT = setTimeout(function () { S.toast = ''; render(); }, 1600); }
+function resToRec(v) {
+  if (v === '予定どおり') return { mode:'done' };
+  if (v === 'やらなかった') return { mode:'none', end:0 };
+  var m = String(v).match(/\d+/); return { mode:'pos', end: m ? Number(m[0]) : 0 };
+}
+// 今日の報告を、シートに記録（押し直したら、上書き）
+function syncReport() {
+  if (!ME) return;
+  var results = [];
+  tasksFor(2).forEach(function (t, k) {
+    var v = S.res[key(2, k)]; if (!v) return;
+    var r = resToRec(v), to = t.b || 0;
+    results.push({ sub:t.sub, name:t.name, from:t.a || 0, to:to, mode:r.mode, end: r.mode === 'done' ? to : r.end });
+  });
+  if (results.length) gas({ source:'liff', userId:ME.userId, name:ME.displayName, results:results })
+    .then(function (j) { if (!j.ok) flash('記録に失敗しました'); }).catch(function () { flash('記録に失敗しました'); });
+}
+var _setRes = setRes; setRes = function (k, v) { _setRes(k, v); syncReport(); };
+
+// 通知の設定を、シートに保存（変えて、少し待ってから）
+function saveSettings() {
+  if (!ME) return; clearTimeout(ST);
+  ST = setTimeout(function () {
+    var n = S.notify;
+    gas({ source:'settings_set', userId:ME.userId, name:ME.displayName, settings:{ todo:n.todo, report:n.report, same:n.same } })
+      .then(function (j) { flash(j.ok ? '通知の設定を保存しました' : '保存に失敗しました'); }).catch(function () { flash('保存に失敗しました'); });
+  }, 600);
+}
+var _setN = setN; setN = function (k, v) { _setN(k, v); saveSettings(); };
+var _tg = toggleSame; toggleSame = function () { _tg(); saveSettings(); };
+
+function boot() {
+  S.plans = [{ id:'juken', status:'active' }]; S.act = 'juken'; S.cur = 'juken'; S.created = true; S.adding = false; S.tab = 'today'; S.sel = 2;
+  document.querySelector('.who').textContent = ME.displayName + 'さん';
+  render();
+  gas({ source:'liff_get', userId:ME.userId }).then(function (j) {
+    if (!j.ok) return;
+    tasksFor(2).forEach(function (t, k) {
+      var r = j.records && j.records[t.name]; if (!r) return;
+      var kk = key(2, k); S.res[kk] = r.mode === 'done' ? '予定どおり' : r.mode === 'none' ? 'やらなかった' : r.end + (t.unit || '') + 'まで';
+      if (r.mode === 'done') S.done[kk] = 1;
+    });
+    render();
+  }).catch(function () {});
+  gas({ source:'settings_get', userId:ME.userId }).then(function (j) {
+    if (!j.ok) return; var n = j.settings; S.notify.todo = n.todo; S.notify.report = n.report; S.notify.same = !!n.same; render();
+  }).catch(function () {});
+}
+function liffError(e) { document.body.insertAdjacentHTML('afterbegin', '<div style="padding:8px 14px;color:#c0392b;font-size:13px">エラー：' + e.message + '</div>'); }
+liff.init({ liffId: LIFF_ID }).then(function () {
+  if (!liff.isLoggedIn()) { liff.login(); return; }
+  return liff.getProfile().then(function (p) { ME = p; boot(); });
+}).catch(liffError);
+</script>
+</body>
+</html>
