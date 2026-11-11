@@ -61,8 +61,8 @@ function editTaskView(){const t=editingTask();if(t&&doc().records[t.id])return n
 function skipView(){const p=plan();if(!p)return noPlan();const tasks=p.tasks.filter(t=>t.date===S.date&&!doc().records[t.id]);return navBack('edit')+card('今日から移動する予定',tasks.map(t=>'<p>'+esc(t.text)+'</p>').join('')||hint('移動できる未記録の予定はありません。'))+'<form data-form="moveDay">'+field('移動先の日付','date',C.add(S.date,1),'date','min="'+C.add(S.date,1)+'" max="'+p.goal+'" required')+hint('移動先に今日の未記録の予定を追加します。既存の予定は残るので、移動先の学習量が増えます。')+'<button class="primary" '+(!tasks.length?'disabled':'')+'>この内容で予定を移す</button></form>'}
 function inLineClient(){return typeof liff!=='undefined'&&typeof liff.isInClient==='function'&&liff.isInClient()}
 function currentPdf(){return S.pdf&&S.pdf.planId===plan()?.id&&S.pdf.studentId===item()?.studentId&&S.pdf.revision===item()?.revision?S.pdf:null}
-function canSharePdf(pdf){try{return !!(!inLineClient()&&pdf&&navigator.share&&navigator.canShare&&navigator.canShare({files:[pdf.file]}))}catch{return false}}
-function externalPdfUrl(){const url=new URL(location.href);url.search='';url.hash='';url.searchParams.set('view','pdf');url.searchParams.set('plan',plan().id);if(S.role==='teacher')url.searchParams.set('role','teacher');if(demo)url.searchParams.set('demo','1');url.searchParams.set('v','pdf3');return url.href}
+function canSharePdf(pdf){try{return !!(pdf&&navigator.share&&navigator.canShare&&navigator.canShare({files:[pdf.file]}))}catch{return false}}
+
 function preparePdfData(response){
  if(typeof response.base64!=='string'||!response.base64.length)throw Error('PDFデータを取得できませんでした。もう一度準備してください');
  let raw;try{raw=atob(response.base64)}catch{throw Error('PDFデータを読み込めませんでした。もう一度準備してください')}
@@ -70,15 +70,20 @@ function preparePdfData(response){
  const file=new File([Uint8Array.from(raw,c=>c.charCodeAt(0))],'学習計画.pdf',{type:'application/pdf'});
  return {file,url:URL.createObjectURL(file),planId:plan().id,studentId:item().studentId,revision:item().revision};
 }
-function pdfView(){const p=plan();if(!p)return noPlan();const pdf=currentPdf(),line=inLineClient();if(line&&!demo)return navBack()+card(p.title,'<p>'+esc(p.start)+'〜'+esc(p.goal)+'</p>')+hint('PDFファイルはSafari・Chromeで保存します。')+btn('Safari・ChromeでPDFを保存','externalPdf','primary')+hint('開いた先で「PDFを準備する」を押してください。LINEのログインが必要な場合があります。');let controls='';
+function pdfView(){const p=plan();if(!p)return noPlan();const pdf=currentPdf(),line=inLineClient();let controls='';
  if(demo)controls=btn('印刷してPDFで保存','downloadPdf','primary');
- else if(pdf){controls=card('PDFの準備ができました',hint('まだ端末には保存されていません。下の保存方法を選んでください。'));
-  if(canSharePdf(pdf))controls+=btn('共有メニューから保存する','sharePdf','primary')+hint('iPhoneは共有メニューで「“ファイル”に保存」を選んでください。');
-  if(line)controls+=btn('Safari・Chromeで開いて保存','externalPdf',canSharePdf(pdf)?'secondary':'primary')+hint('LINE内で保存できないときはこちら。ブラウザでLINEにログイン後、同じ計画のPDFを準備できます。');
-  controls+='<a class="secondary" href="'+esc(pdf.url)+'" target="_blank" rel="noopener">PDFの内容を開く</a><a class="'+(!line&&!canSharePdf(pdf)?'primary':'secondary')+'" id="pdfDownloadLink" href="'+esc(pdf.url)+'" download="学習計画.pdf" target="_blank" rel="noopener">PDFをダウンロード</a>'+btn('PDFをつくり直す','downloadPdf','secondary');
- }else controls=hint('① PDFを準備します。② 準備後に、保存・共有のボタンを押してください。')+btn('PDFを準備する','downloadPdf','primary')+(line?btn('Safari・Chromeで開いて保存','externalPdf','secondary'):'');
+ else if(pdf){
+  controls=card('PDFの準備ができました','<p>学習計画.pdf · '+Math.max(1,Math.round(pdf.file.size/1024))+' KB</p>'+hint('下のプレビューで内容を確認して、保存ボタンを押してください。'));
+  if(canSharePdf(pdf))controls+=btn('PDFを「ファイル」に保存','sharePdf','primary')+hint('開いたメニューで「“ファイル”に保存」を選んでください。');
+  else controls+=hint('PDFを開き、PDF画面の保存・共有ボタンを使ってください。');
+  controls+='<iframe class="pdf-preview" src="'+esc(pdf.url)+'" title="学習計画PDFのプレビュー" style="display:block;width:100%;height:390px;border:1px solid var(--line);border-radius:12px;background:white"></iframe>';
+  controls+='<a class="'+(canSharePdf(pdf)?'secondary':'primary')+'" id="pdfOpenLink" href="'+esc(pdf.url)+'" target="_blank" rel="noopener">PDFを開く</a>';
+  if(!line)controls+='<a class="secondary" id="pdfDownloadLink" href="'+esc(pdf.url)+'" download="学習計画.pdf" target="_blank" rel="noopener">PDFをダウンロード</a>';
+  controls+=btn('PDFをつくり直す','downloadPdf','secondary');
+ }else controls=hint('PDFを準備すると、内容の確認と保存ができます。')+btn('PDFを準備する','downloadPdf','primary');
  return navBack()+card(p.title,'<p>'+esc(p.start)+'〜'+esc(p.goal)+'</p>')+controls;
 }
+
 window.addEventListener('pagehide',e=>{if(!e.persisted&&S.pdf){URL.revokeObjectURL(S.pdf.url);S.pdf=null}});
 
 function wizardView(){const prev=C.active(doc()),w=S.wizard;if(!w)return noPlan();const a=w.input,n=w.step;const questions=['何に向けた計画をつくりますか？','目標を教えてください。','いつから、いつまで取り組みますか？','教材と、終わらせたい範囲を教えてください。','曜日ごとに使える時間を教えてください。','この内容で計画をつくりますか？'];let body='';
@@ -107,8 +112,8 @@ $('phone').addEventListener('click',e=>{const b=e.target.closest('[data-action]'
  if(a==='check')return busy(async()=>{await mutate({type:'check'});S.page='detail'});
  if(a==='reportDone'||a==='reportNone')return busy(async()=>{await mutate({type:'report',planId:plan().id,taskId:S.taskId,mode:a==='reportDone'?'done':'none'});S.page='today'});
  if(a==='deleteTask'){if(!confirm('この予定を削除しますか？変更は履歴に残ります。'))return;return busy(async()=>{await mutate({type:'delete_task',planId:plan().id,taskId:S.taskId});S.page='edit'})}
- if(a==='externalPdf'){try{const url=externalPdfUrl();if(inLineClient())liff.openWindow({url,external:true});else window.open(url,'_blank','noopener')}catch(error){S.error='外部ブラウザを開けませんでした。LINEのメニューからSafari・Chromeで開いてください。';renderStatus()}return}
- if(a==='sharePdf'){const pdf=currentPdf();if(!canSharePdf(pdf)){S.error='この画面ではファイルを共有できません。Safari・Chromeで開いて保存してください。';return renderStatus()}try{navigator.share({files:[pdf.file]}).catch(error=>{if(error.name!=='AbortError'){S.error='共有できませんでした。Safari・Chromeで開いて保存してください。';renderStatus()}})}catch(error){S.error='共有できませんでした。Safari・Chromeで開いて保存してください。';renderStatus()}return}
+
+ if(a==='sharePdf'){const pdf=currentPdf();if(!canSharePdf(pdf)){S.error='保存メニューを開けませんでした。「PDFを開く」から保存してください。';return renderStatus()}try{navigator.share({files:[pdf.file]}).catch(error=>{if(error.name!=='AbortError'){S.error='保存メニューを開けませんでした。「PDFを開く」から保存してください。';renderStatus()}})}catch(error){S.error='保存メニューを開けませんでした。「PDFを開く」から保存してください。';renderStatus()}return}
  if(a==='downloadPdf'){if(demo){const w=window.open('','_blank');if(!w){S.error='ポップアップを許可してください';return render()}w.document.write(printHtml(plan()));w.document.close();w.print();return}return busy(async()=>{const response=await api('app_pdf',{studentId:item().studentId,planId:plan().id});const pdf=preparePdfData(response);if(S.pdf)URL.revokeObjectURL(S.pdf.url);S.pdf=pdf})}
 
 });
