@@ -264,10 +264,15 @@ function apply(doc,action,actor,ctx){
  }
  d.history.unshift({id:ctx.id,at:now,by:actor.role==='teacher'?'講師':(actor.relation&&actor.relation!=='本人'?'保護者':'生徒'),text:msg});d.history=d.history.slice(0,100);return d;
 }
+// 計画がいま、どの段階か（画面の案内に使う）：before＝始まる前／during＝取り組み中／after＝終わった／paused＝一時停止
+function stateOf(p,today){if(!p)return null;var end=p.end||p.goal;if(p.status==='paused')return {phase:'paused'};if(p.status==='finished')return {phase:'after',daysAgo:Math.max(0,days(end,today))};if(today<p.start)return {phase:'before',daysTo:days(today,p.start)};if(today>end&&(p.goal<today))return {phase:'after',daysAgo:days(p.goal,today)};return {phase:'during',daysLeft:Math.max(0,days(today,p.goal))}}
+// 講師の一覧に出す、生徒ごとのまとめ（数字は、達成率と同じ方式：時間（量）で数える）
+function studentSummary(doc,today){var p=active(doc),g=p?progressOf(doc,p,today):null,last=null;Object.keys(doc.records||{}).forEach(function(k){var r=doc.records[k];if(r&&r.updatedAt&&(!last||r.updatedAt>last))last=r.updatedAt});
+ return {hasPlan:!!p,title:p?p.title:'',state:stateOf(p,today),thisWeek:g?g.achievement.thisWeek:null,lastWeek:g?g.achievement.lastWeek:null,missedCount:g?g.missedCount:0,needsReplan:!!(g&&g.needsReplan),fits:g?g.fits:true,streak:g?g.streak:0,lastRecord:last?last.slice(0,10):null,checkedThisWeek:doc.checkedWeek===week(today),reviewDue:reviewDue(doc,today)}}
 // 月1回の見直しの時期か（受験逆算の計画で、今月まだ見直していない）
 function reviewDue(doc,today){var p=active(doc);if(!p||!p.juken||!p.juken.materials)return false;var last=p.juken.lastReview||p.start;return String(last).slice(0,7)<String(today).slice(0,7)}
 function week(today){var w=(new Date(today+'T00:00:00Z').getUTCDay()+6)%7;return add(today,-w)}
 function shiftPaused(p,d,today){if(!p.pausedAt)return;var delta=Math.max(0,days(p.pausedAt,today));p.tasks.forEach(function(t){if(!d.records[t.id]&&t.date>=p.pausedAt)t.date=add(t.date,delta)});p.goal=add(p.goal,delta);p.input.goal=p.goal;p.pausedAt=null}
 function resume(doc,today){var d=copy(doc),p=active(d);if(!p||p.goal>=today)return d;var q=d.plans.find(function(q){return q.status==='paused'&&q.resumeAfter&&q.resumeAfter<=today});if(q){p.status='finished';shiftPaused(q,d,today);q.status='active';q.resumeAfter=null;d.activeId=q.id;d.history.unshift({id:'resume-'+today,at:today,by:'システム',text:'計画「'+q.title+'」を自動再開'})}return d}
-var api={reviewDue:reviewDue,TYPES:TYPES,empty:empty,build:build,apply:apply,resume:resume,progress:progress,progressOf:progressOf,printHtml:printHtml,active:active,add:add,week:week,validateSettings:validateSettings,copy:copy};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudyCore=api;
+var api={stateOf:stateOf,studentSummary:studentSummary,reviewDue:reviewDue,TYPES:TYPES,empty:empty,build:build,apply:apply,resume:resume,progress:progress,progressOf:progressOf,printHtml:printHtml,active:active,add:add,week:week,validateSettings:validateSettings,copy:copy};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudyCore=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
