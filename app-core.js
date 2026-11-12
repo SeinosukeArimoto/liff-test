@@ -2,7 +2,7 @@
 'use strict';
 var E=typeof module!=='undefined'&&module.exports?require('../plan_pdf/src/engine.js'):root.PlanEngine;
 var JC=typeof module!=='undefined'&&module.exports?require('./juken-core.js'):root.JukenCore;
-var TYPES={test:'定期テスト',exam:'検定',juken:'大学受験（教材の日割り）',habit:'習慣づくり',task:'課題・タスク'};
+var TYPES={test:'定期テスト',exam:'検定',juken:'大学受験（志望校から逆算）',habit:'習慣づくり',task:'課題・タスク'};
 function fail(s){throw new Error(s)}
 function copy(x){return JSON.parse(JSON.stringify(x))}
 function text(x,max){return String(x==null?'':x).trim().slice(0,max||120)}
