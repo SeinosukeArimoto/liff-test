@@ -93,7 +93,8 @@
   var UNIT_FMT = {
     'ページ': function (a, b) { return a === b ? 'p.' + a : 'p.' + a + '〜' + b; },
     '問題の番号': function (a, b) { return a === b ? 'No.' + a : 'No.' + a + '〜' + b; },
-    '単語の番号': function (a, b) { return a === b ? a + '番' : a + '〜' + b + '番'; }
+    '単語の番号': function (a, b) { return a === b ? a + '番' : a + '〜' + b + '番'; },
+    '枚': function (a, b) { return a === b ? a + '枚' : a + '〜' + b + '枚'; }
   };
   function rangeText(unit, a, b) { var f = UNIT_FMT[unit]; return f ? f(a, b) : a + '〜' + b; }
 
