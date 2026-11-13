@@ -245,6 +245,10 @@ function apply(doc,action,actor,ctx){
   p.tasks.push({id:ctx.id,date:dt,name:nm,subject:text(a.subject||'学習',30),text:text(a.text||nm,200),minutes:number(a.minutes,1,360),from:null,to:null,unit:''});msg='やることを追加';break;
  case 'move_day':if(!p)fail('計画が見つかりません');var dest=date(a.date);if(dest<=today||dest>p.goal)fail('移動先は明日以降、計画終了日までにしてください');var moving=p.tasks.filter(function(t){return t.date===today&&!d.records[t.id]});if(!moving.length)fail('今日から移せる予定がありません');moving.forEach(function(t){t.date=dest});msg='今日の未記録の予定を'+dest+'へ移動';break;
  case 'rebuild':if(!p)fail('計画が見つかりません');var input=copy(a.input);input.start=today;var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
+  if(p.juken){var jn=build(input,today,ctx.id);retained.forEach(function(t){if(!d.records[t.id]&&t.date<today)t.rescheduled=today});jn.juken.reviews=p.juken.reviews||[];jn.juken.lastReview=p.juken.lastReview||null;var keepRoad=p.roadmapEdited?p.roadmap:null;
+   p.input=jn.input;p.juken=jn.juken;p.roadmap=keepRoad||jn.roadmap;p.title=jn.title;p.target=jn.target;p.goal=jn.goal;p.end=jn.end;p.warnings=jn.warnings;
+   if(p.juken.autoTasks){syncUpper(p,d.records,today);p.leftovers=[];regenTasks(p,d.records,today,'b'+today)}else{p.tasks=p.tasks.filter(function(t){return t.date<today||d.records[t.id]}).concat(jn.tasks);p.leftovers=jn.leftovers}
+   msg='条件を変更して予定を再作成（受験逆算）';break}
   if(retained.length){if(p.juken)fail('受験逆算の計画は、「遅れを組み直す」を使ってください');if(p.type!=='habit'){input.materials=remainingMaterials(p,d.records);if(!input.materials.length)fail('すべての範囲が終わっています');if(p.type==='task')input.homeworks=(p.input.homeworks||[]).map(function(h){var rm=input.materials.find(function(m){return m.name===h.name});return rm?Object.assign({},h,{from:rm.from,amount:rm.to-rm.from+1}):null}).filter(Boolean)}}
   var n=build(input,today,ctx.id);retained.forEach(function(t){if(!d.records[t.id]&&t.date<today)t.rescheduled=today});
   p.input=n.input;p.tasks=retained.concat(n.tasks);p.goal=n.goal;p.title=n.title;p.target=n.target;p.leftovers=n.leftovers;msg='条件を変更して予定を再作成';break;
