@@ -312,7 +312,7 @@ function apply(doc,action,actor,ctx){
    nw.items.forEach(function(i){if(!seen[i.slot]){if(jr.autoTasks)i.tracked=true;out.push(i)}});
    out.sort(function(x,y){return (x.slot==null?9999:x.slot)-(y.slot==null?9999:y.slot)||0});
    var sp2={subject:old.subject,items:out,skipped:nw.skipped||old.skipped||[]};JC.relayoutFrom(sp2,today,jr.examYm);
-   if(!sp2.fits)rv.warnings.push(old.subject+'：入試までに入りきりません（約'+sp2.shortDays+'日の超過）。教材の見送りや、期間の見直しを検討してください');
+   if(!sp2.fits)rv.warnings.push(old.subject+'：入試までに終わりません（約'+sp2.shortDays+'日、足りません）。教材の見送りや、期間の見直しを検討してください');
    return sp2});
   if(jr.autoTasks)regenTasks(p,d.records,today,'v'+today);
   var pr=progressOf(d,p,today);if(pr&&(pr.missedCount>0||(pr.achievement.lastWeek!=null&&pr.achievement.lastWeek<60)))rv.warnings.push('日ごとの計画に、遅れがあります（先週の達成率 '+(pr.achievement.lastWeek==null?'—':pr.achievement.lastWeek+'%')+'、遅れ '+pr.missedCount+'件）。上段の到達点の見直しや、組み直しを検討してください');

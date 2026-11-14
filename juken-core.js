@@ -115,6 +115,7 @@
   //   同じ種類・下のレベル → 置き換えない（ルートの教材を優先）。マスタにない教材・種類が違う教材 → 置き換えない（講師が確認）
   var LEVEL = { '入門': 0, '基礎': 1, '標準': 2, '網羅': 2, '国公立': 3, '応用': 3, '難関': 4 };
   var STANDARD_WEEKLY_MIN = 300;      // 「週間の目安ペース」は、週5時間（300分）で進む速さと仮定した（マスタに前提の時間がない。暫定）
+  var LVN = ['入門', '基礎', '標準', '応用', '難関'];
   var MINDEV = [0, 40, 50, 58, 65];          // そのレベルの教材を扱える、現在の偏差値（河合基準）の目安。暫定値
   function tagParts(tag) { var m = /^\[(.+)_([^_\]]+)\]$/.exec(tag || ''); return m && m[2] in LEVEL ? { cat: m[1], lvl: LEVEL[m[2]], name: m[2] } : null; }
   function resolveOwned(d, owned) {
@@ -161,10 +162,11 @@
           if (cand) {
             if (cand.tp.lvl <= rp.lvl) {
               if (cand.tp.lvl === rp.lvl) { cand.used = true; item = { id: cand.id, name: cand.mat[0], phase: r[3], total: cand.mat[3], unit: cand.mat[4], pace: cand.mat[5], slot: r[2], replaced: { fromId: r[4], fromName: m[0], why: '手持ちの教材が、同じ種類・同じレベルのため' } }; }
+              else { cand.used = true; item.hold = { kind: 'lower', ownId: cand.id, ownName: cand.mat[0], why: '手持ちの「' + cand.mat[0] + '」は、ルートの「' + m[0] + '」より、やさしいレベル（' + LVN[cand.tp.lvl] + '）です。この段階には、やさしすぎる可能性があります。' }; }
             } else {
               cand.used = true;
               if (o.dev != null && o.dev >= MINDEV[cand.tp.lvl]) item = { id: cand.id, name: cand.mat[0], phase: r[3], total: cand.mat[3], unit: cand.mat[4], pace: cand.mat[5], slot: r[2], replaced: { fromId: r[4], fromName: m[0], why: '手持ちの教材が、1つ上のレベルで、今の偏差値で扱えるため' } };
-              else item.hold = { ownId: cand.id, ownName: cand.mat[0], why: o.dev == null ? '手持ちの教材のほうが、上のレベルです。偏差値が分からないため、保留（講師が決める）' : '手持ちの教材のほうが、上のレベルです。実力不足のため、一時保留（偏差値' + MINDEV[cand.tp.lvl] + '以上で、置き換え可）' };
+              else item.hold = { kind: 'upper', ownId: cand.id, ownName: cand.mat[0], why: o.dev == null ? '手持ちの「' + cand.mat[0] + '」は、ルートの「' + m[0] + '」より、難しいレベル（' + LVN[cand.tp.lvl] + '）です。偏差値が分からないため、いまの学力に合うか、判断できません。' : '手持ちの「' + cand.mat[0] + '」は、ルートの「' + m[0] + '」より、難しいレベル（' + LVN[cand.tp.lvl] + '）です。いまの偏差値（' + Math.round(o.dev * 10) / 10 + '）は、目安（' + MINDEV[cand.tp.lvl] + '）に届いていません。実力不足のため、一時保留にしています。' };
             }
           }
         }
@@ -182,8 +184,8 @@
     });
     // 手持ち教材の扱いの一覧：置き換えた／保留／使わない（理由つき）。マスタにない教材は、講師が確認
     var owned = own.map(function (o) {
-      var rep = null; out.forEach(function (p) { (p.items || []).forEach(function (i) { if (i.replaced && i.id === o.id) rep = { subject: p.subject, replaced: i.replaced.fromName }; if (i.hold && i.hold.ownId === o.id) rep = { subject: p.subject, hold: i.name, why: i.hold.why }; }); });
-      return { id: o.id, name: o.name, status: rep ? (rep.hold ? '保留' : '置き換え') : (o.mat ? (o.tp ? '使わない' : 'レベル不明') : 'マスタにない'), note: rep ? (rep.hold ? rep.why : rep.subject + '：「' + rep.replaced + '」の代わりに使う') : (!o.mat ? '教材マスタにないため、レベルが分かりません。講師が確認してください' : !o.tp ? 'レベルが分からないため、使いません' : own.some(function (x) { return x !== o && x.used && x.tp && x.tp.cat === o.tp.cat; }) ? 'すでに、同じ種類の別の手持ち教材を使うため、使いません' : 'ルートの教材と同じ種類で、同じか上のレベルのものがないため、ルートの教材を優先します') };
+      var rep = null; out.forEach(function (p) { (p.items || []).forEach(function (i) { if (i.replaced && i.id === o.id) rep = { subject: p.subject, replaced: i.replaced.fromName }; if (i.hold && i.hold.ownId === o.id) rep = { subject: p.subject, hold: i.name, why: i.hold.why, kind: i.hold.kind }; }); });
+      return { id: o.id, name: o.name, status: rep ? (rep.hold ? (rep.kind === 'lower' ? '警告' : '保留') : '置き換え') : (o.mat ? (o.tp ? '使わない' : 'レベル不明') : 'マスタにない'), note: rep ? (rep.hold ? rep.why : rep.subject + '：「' + rep.replaced + '」の代わりに使う') : (!o.mat ? '教材マスタにないため、レベルが分かりません。講師が確認してください' : !o.tp ? 'レベルが分からないため、使いません' : own.some(function (x) { return x !== o && x.used && x.tp && x.tp.cat === o.tp.cat; }) ? 'すでに、同じ種類の別の手持ち教材を使うため、使いません' : 'ルートの教材と同じ種類で、同じか上のレベルのものがないため、ルートの教材を優先します') };
     });
     out.owned = owned; return out;
   }
