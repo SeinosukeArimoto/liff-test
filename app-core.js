@@ -61,14 +61,15 @@ function unitInfo(u){
  return {u:'',f:function(x,y){return x+(y>x?'〜'+y:'')+u}};
 }
 // 教材の期間のうち、勉強できる日（時間がある曜日・行事でない・予備日でない）に、残りの量を均等に割る
-function tasksFromRoute(a,id,plans,fromDate,tag){
- var limit=a.end||a.goal,maxTo=fromDate;plans.forEach(function(sp){if(!sp.missing)sp.items.forEach(function(it){if(!it.finished&&it.to>maxTo)maxTo=it.to})});
+function winEnd(a,from){var l=a.end||a.goal,w=add(from,13);return w<l?w:l}
+function tasksFromRoute(a,id,plans,fromDate,tag,until){
+ var limit=a.end||a.goal,outLimit=until||winEnd(a,fromDate),maxTo=fromDate;plans.forEach(function(sp){if(!sp.missing)sp.items.forEach(function(it){if(!it.finished&&it.to>maxTo)maxTo=it.to})});
  var days=E._internal.buildDays(fromDate,maxTo>limit?maxTo:limit,rowOf(a)).days.filter(function(d){return d.kind==='study'&&d.cap>0}),out=[],n=0;      // 量は、教材の期間の全体（計画の終了日を過ぎても）に割り、計画の終了日までの分だけ、やることにする
  plans.forEach(function(sp){if(sp.missing)return;sp.items.forEach(function(it){
   if(it.finished||!it.total)return;var done=it.doneUnits||0,remain=it.total-done;if(remain<=0)return;
   var lo0=it.from<fromDate?fromDate:it.from,ds=days.filter(function(d){return d.date>=lo0&&d.date<=it.to});if(!ds.length)return;var ui=unitInfo(it.unit);
   ds.forEach(function(d,k){var lo=done+Math.floor(remain*k/ds.length)+1,hi=done+Math.floor(remain*(k+1)/ds.length);if(hi<lo)return;
-   if(d.date>limit)return;out.push({id:id+'-'+tag+'-'+(n++),date:d.date,name:it.name,subject:sp.subject,text:it.name+' '+ui.f(lo,hi),from:lo,to:hi,unit:ui.u,minutes:Math.max(1,Math.ceil((hi-lo+1)*(it.minPerUnit||5))),item:it.id,jsubj:sp.subject})})})});
+   if(d.date>outLimit)return;out.push({id:id+'-'+tag+'-'+(n++),date:d.date,name:it.name,subject:sp.subject,text:it.name+' '+ui.f(lo,hi),from:lo,to:hi,unit:ui.u,minutes:Math.max(1,Math.ceil((hi-lo+1)*(it.minPerUnit||5))),item:it.id,jsubj:sp.subject})})})});
  return out;
 }
 // 教材ごとの、実際に進んだ量（できた＝全部、途中まで＝位置まで）
@@ -84,10 +85,10 @@ function syncUpper(p,records,today){
   JC.relayoutFrom(sp,today,p.juken.examYm)});
 }
 // 上段を直したあと：今日以降で、記録のない日ごとのやることを作り直す。過去の未記録には「組み直し済み」の印
-function regenTasks(p,records,today,tag){
- p.tasks.forEach(function(t){if(t.item!==undefined&&t.date<today&&!records[t.id]&&!t.rescheduled)t.rescheduled=today});
+function regenTasks(p,records,today,tag,keepMiss){
+ if(!keepMiss)p.tasks.forEach(function(t){if(t.item!==undefined&&t.date<today&&!records[t.id]&&!t.rescheduled)t.rescheduled=today});
  var keep=p.tasks.filter(function(t){return t.item===undefined||t.date<today||records[t.id]}),fresh=tasksFromRoute(p.input,p.id,p.juken.materials,today<p.start?p.start:today,tag);
- p.tasks=keep.concat(fresh).sort(function(x,y){return x.date<y.date?-1:x.date>y.date?1:0});
+ p.tasks=keep.concat(fresh).sort(function(x,y){return x.date<y.date?-1:x.date>y.date?1:0});p.tasksUntil=winEnd(p.input,today<p.start?p.start:today);
 }
 function hwWarnings(a,tasks,remaining){var w=[];if(a.type!=='task')return w;var mdd=function(x){return Number(x.slice(5,7))+'/'+Number(x.slice(8,10))};a.homeworks.forEach(function(h){var last='';tasks.forEach(function(t){if(t.name===h.name&&t.date>last)last=t.date});var left=(remaining||[]).some(function(l){return String(l.text).indexOf(h.name)===0});if(left||(last&&last>h.due))w.push('「'+h.name+'」は、提出日（'+mdd(h.due)+'）までに終わりません。削るものを、講師と決めてください');if(h.unitMin==null)w.push('「'+h.name+'」の1ページの時間は、仮の値です。実際に計って、直してください')});return w}
 function build(input,today,id){
@@ -102,7 +103,7 @@ function build(input,today,id){
  var jk=null,rm,wm=a.juken&&a.juken.autoTasks?Math.max(30,Math.round(a.availability.reduce(function(x,y){return x+y},0)/Math.max(1,a.juken.subjects.length))):undefined;
  if(a.juken){var jp=JC.plan({weeklyMinutes:wm,band:a.juken.band,others:a.juken.others,univ:{dev:a.juken.dev},mock:a.juken.mockType&&a.juken.mockScore!=null?{type:a.juken.mockType,score:a.juken.mockScore}:null,start:a.start,examYm:a.juken.examYm,route:a.juken.route||undefined,subjects:a.juken.subjects,owned:a.juken.owned});rm=jp.roadmap;if(a.juken.autoTasks){jp.materials.forEach(function(sp){(sp.items||[]).forEach(function(i){i.tracked=true})});tasks=tasksFromRoute(a,id,jp.materials,a.start,'u')}
   jk={autoTasks:!!a.juken.autoTasks,weeklyMinutes:wm,start:a.start,dev:a.juken.dev,mock:a.juken.mockType&&a.juken.mockScore!=null?{type:a.juken.mockType,score:a.juken.mockScore}:null,subjects:a.juken.subjects,ownedInput:a.juken.owned,reviews:[],lastReview:null,materials:jp.materials,owned:jp.owned,baseBand:jp.baseBand,mixedNote:jp.mixedNote,others:a.juken.others,band:jp.band,bandName:jp.bandName,route:jp.route,routeName:jp.routeName,gap:jp.gap,adjustNote:jp.adjustNote,ratioNote:jp.ratioNote,univ:a.juken.univ,examYm:a.juken.examYm}}
- return {id:id,type:a.type,title:a.title,target:a.target,input:a,start:a.start,goal:a.goal,end:a.end,tasks:tasks,leftovers:remaining,roadmap:rm,juken:jk,warnings:built.busy.unparsed.map(function(x){return '行事のメモを読み取れませんでした：'+x}).concat(hwWarnings(a,tasks,remaining)),status:'active',resumeAfter:null};
+ return {id:id,type:a.type,title:a.title,target:a.target,input:a,start:a.start,goal:a.goal,end:a.end,tasks:tasks,leftovers:remaining,roadmap:rm,juken:jk,warnings:built.busy.unparsed.map(function(x){return '行事のメモを読み取れませんでした：'+x}).concat(hwWarnings(a,tasks,remaining)),status:'active',resumeAfter:null,tasksUntil:(a.juken&&a.juken.autoTasks)?winEnd(a,a.start):null};
 }
 
 // ---------- 遅れの組み直し（記録を残したまま、まだ終わっていない範囲を、残りの日に並べ直す）----------
@@ -326,6 +327,9 @@ function studentSummary(doc,today){var p=active(doc),g=p?progressOf(doc,p,today)
 function reviewDue(doc,today){var p=active(doc);if(!p||!p.juken||!p.juken.materials)return false;var last=p.juken.lastReview||p.start;return String(last).slice(0,7)<String(today).slice(0,7)}
 function week(today){var w=(new Date(today+'T00:00:00Z').getUTCDay()+6)%7;return add(today,-w)}
 function shiftPaused(p,d,today){if(!p.pausedAt)return;var delta=Math.max(0,days(p.pausedAt,today));p.tasks.forEach(function(t){if(!d.records[t.id]&&t.date>=p.pausedAt)t.date=add(t.date,delta)});p.goal=add(p.goal,delta);p.input.goal=p.goal;p.pausedAt=null}
-function resume(doc,today){var d=copy(doc),p=active(d);if(!p||p.goal>=today)return d;var q=d.plans.find(function(q){return q.status==='paused'&&q.resumeAfter&&q.resumeAfter<=today});if(q){p.status='finished';shiftPaused(q,d,today);q.status='active';q.resumeAfter=null;d.activeId=q.id;d.history.unshift({id:'resume-'+today,at:today,by:'システム',text:'計画「'+q.title+'」を自動再開'})}return d}
-var api={estimate:taskMin,stateOf:stateOf,studentSummary:studentSummary,reviewDue:reviewDue,TYPES:TYPES,empty:empty,build:build,apply:apply,resume:resume,progress:progress,progressOf:progressOf,printHtml:printHtml,active:active,add:add,week:week,validateSettings:validateSettings,copy:copy};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudyCore=api;
+// 2週間より先は、週ごとの合計だけ（Notion v3）：日ごとの予定と同じ計算で、週にまとめる
+function futureWeeks(p,today){if(!p||!p.juken||!p.juken.autoTasks||!p.tasksUntil)return [];var end=p.end||p.goal;if(p.tasksUntil>=end)return [];var ts=tasksFromRoute(p.input,'fw',p.juken.materials,today<p.start?p.start:today,'fw',end),map={};ts.forEach(function(t){if(t.date<=p.tasksUntil)return;var wk=week(t.date),o=map[wk]=map[wk]||{week:wk,total:0,subjects:{}};o.total+=t.minutes;o.subjects[t.jsubj]=(o.subjects[t.jsubj]||0)+t.minutes});return Object.keys(map).sort().map(function(k){return map[k]})}
+function extendWindow(p,records,today){(p.juken.materials||[]).forEach(function(sp){if(sp.missing)return;sp.items.forEach(function(it){if(it.tracked&&it.total)it.doneUnits=itemActual(p,records,it,sp.subject)})});regenTasks(p,records,today,'w'+today,true)}
+function resume(doc,today){var d=copy(doc),p=active(d);if(p&&p.status==='active'&&p.juken&&p.juken.autoTasks&&p.tasksUntil&&p.tasksUntil<(p.end||p.goal)&&p.tasksUntil<add(today,7)&&today>=p.start)extendWindow(p,d.records,today);if(!p||p.goal>=today)return d;var q=d.plans.find(function(q){return q.status==='paused'&&q.resumeAfter&&q.resumeAfter<=today});if(q){p.status='finished';shiftPaused(q,d,today);q.status='active';q.resumeAfter=null;d.activeId=q.id;d.history.unshift({id:'resume-'+today,at:today,by:'システム',text:'計画「'+q.title+'」を自動再開'})}return d}
+var api={futureWeeks:futureWeeks,estimate:taskMin,stateOf:stateOf,studentSummary:studentSummary,reviewDue:reviewDue,TYPES:TYPES,empty:empty,build:build,apply:apply,resume:resume,progress:progress,progressOf:progressOf,printHtml:printHtml,active:active,add:add,week:week,validateSettings:validateSettings,copy:copy};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudyCore=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

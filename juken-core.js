@@ -145,6 +145,8 @@
   }
 
   // 科目ごとに、教材を順番に並べる。o：band・subjects・start・examYm・level・route・owned（手持ち教材：[{id}か{name}]）・dev（現在の偏差値。河合基準へ補正ずみ）
+  // 共通テスト専用科目（Notion「情報I・理科基礎・公民」。ルートマスタの科目名に当てはめた）：開始は、高3の秋（9月）以降
+  var KYOTSU_ONLY = ['情報I', '地学基礎', '公共', '倫理', '政経', '政経(共テ)'];
   function materialPlan(o) {
     var d = routeData(o.data), out = [], own = resolveOwned(d, o.owned);
     (o.subjects || []).forEach(function (subject) {
@@ -174,8 +176,9 @@
         if (o.level === 'ビハインド' && o.route === 'short' && pn === 4) { skipped.push({ id: item.id, name: item.name, reason: '目標との差が大きく、短期のため、応用を見送り、過去問へ' }); return; }
         item.weeks = Math.max(1, Math.ceil(weeks * factor)); item.stretch = factor === 1 ? null : factor; items.push(item);
       });
-      var lay = layout(items, o.start, o.examYm);
-      out.push({ subject: subject, skipped: skipped, items: items, totalWeeks: lay.totalWeeks, finish: lay.finish, fits: lay.fits, shortDays: lay.shortDays, slackWeeks: lay.slackWeeks });
+      var minStart = KYOTSU_ONLY.indexOf(subject) >= 0 && o.examYm ? ((+o.examYm.slice(0, 4) - 1) + '-09-01') : null, st0 = minStart && o.start < minStart ? minStart : o.start;
+      var lay = layout(items, st0, o.examYm);
+      out.push({ minStart: minStart, subject: subject, skipped: skipped, items: items, totalWeeks: lay.totalWeeks, finish: lay.finish, fits: lay.fits, shortDays: lay.shortDays, slackWeeks: lay.slackWeeks });
     });
     // 手持ち教材の扱いの一覧：置き換えた／保留／使わない（理由つき）。マスタにない教材は、講師が確認
     var owned = own.map(function (o) {
@@ -193,7 +196,7 @@
     if (!n && sp.items.length && sp.items[0].from > today) start = sp.items[0].from;
     return relayout(sp, start, examYm, n);
   }
-  function relayout(subjectPlan, start, examYm, fixed) { var lay = layout(subjectPlan.items, start, examYm, fixed); subjectPlan.totalWeeks = lay.totalWeeks; subjectPlan.finish = lay.finish; subjectPlan.fits = lay.fits; subjectPlan.shortDays = lay.shortDays; subjectPlan.slackWeeks = lay.slackWeeks; return subjectPlan; }
+  function relayout(subjectPlan, start, examYm, fixed) { if (subjectPlan.minStart && start < subjectPlan.minStart) start = subjectPlan.minStart; var lay = layout(subjectPlan.items, start, examYm, fixed); subjectPlan.totalWeeks = lay.totalWeeks; subjectPlan.finish = lay.finish; subjectPlan.fits = lay.fits; subjectPlan.shortDays = lay.shortDays; subjectPlan.slackWeeks = lay.slackWeeks; return subjectPlan; }
   // 月ごとの道筋に、その月に取り組む教材を足す
   function withMaterials(rm, plans) {
     return rm.map(function (r) {
