@@ -200,7 +200,7 @@ function printHtml(doc,plan,name,today){
  var fb=(doc.feedback||[]).slice(0,5);
  if(fb.length)h+='<h2>講師のひとこと</h2>'+fb.map(function(f){return '<p><span class="lt">'+esc(String(f.at||'').slice(0,10))+'　'+esc(f.by)+'</span><br>'+esc(f.text).replace(/\n/g,'<br>')+'</p>'}).join('');
  var hs=(doc.history||[]).slice(0,10);
- if(hs.length)h+='<h2>変更の履歴</h2><table><tr><th style="width:18%">日付</th><th style="width:12%">だれが</th><th>内容</th></tr>'+hs.map(function(x){return '<tr><td>'+esc(String(x.at||'').slice(0,10))+'</td><td>'+esc(x.by)+'</td><td>'+esc(x.text)+'</td></tr>'}).join('')+'</table>';
+ if(hs.length)h+='<h2>変更履歴</h2><table><tr><th style="width:18%">日付</th><th style="width:12%">だれが</th><th>内容</th></tr>'+hs.map(function(x){return '<tr><td>'+esc(String(x.at||'').slice(0,10))+'</td><td>'+esc(x.by)+'</td><td>'+esc(x.text)+'</td></tr>'}).join('')+'</table>';
  return h+'</body></html>';
 }
 function validateSettings(s,teacher){var out=copy(s||{});['todo','report','wt'].forEach(function(k){if(k in out&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(out[k]))fail('時刻を確認してください')});if('wd' in out)number(out.wd,0,6);if('notifyTo' in out&&['auto','self','mother','father','all'].indexOf(out.notifyTo)<0)fail('通知を受け取る人を確認してください');if('lateDays' in out&&[2,3,5].indexOf(out.lateDays)<0)fail('通知する日数を確認してください');if(teacher&&out.mode&&['まとめて1通','生徒ごと'].indexOf(out.mode)<0)fail('通知の届き方を確認してください');if(out.same)out.report=out.todo;return out}
