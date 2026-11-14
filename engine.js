@@ -51,7 +51,7 @@
   function createdDate(row) { var m = /^(\d{4}-\d{2}-\d{2})/.exec(str(row, '作成日')); return m ? m[1] : null; }
 
   function availability(row) {
-    return DAY_KEYS.map(function (k) { var a = AVAIL_MIN[str(row, 'avail_' + k)]; return a == null ? 0 : a; });
+    return DAY_KEYS.map(function (k) { var v = str(row, 'avail_' + k), a = AVAIL_MIN[v]; if (a == null) { var m = /^(\d+)\s*分$/.exec(v); a = m ? Number(m[1]) : 0; } return a; });
   }
   function reserveIndex(row) { return DAY_JA.indexOf(str(row, 'reserve_day')); }
 
