@@ -114,7 +114,7 @@ function fillPar(days,tasks){
    for(;;){var bi=-1,br=0;lanes.forEach(function(l,i){var t=cur(l);if(!t||room(l,cnt[i])<=0||t.unitMin>left)return;var r=rem(l)-cnt[i]*t.unitMin;if(r>br){br=r;bi=i}});if(bi<0)break;cnt[bi]++;left-=cur(lanes[bi]).unitMin;placed++}
    if(placed===before)break;
   }
-  if(!placed){var bi2=-1,br2=0;lanes.forEach(function(l,i){if(cur(l)&&rem(l)>br2){br2=rem(l);bi2=i}});if(bi2>=0){cnt[bi2]=1;placed=1}}
+  if(!placed&&!day.noForce){var bi2=-1,br2=0;lanes.forEach(function(l,i){if(cur(l)&&rem(l)>br2){br2=rem(l);bi2=i}});if(bi2>=0){cnt[bi2]=1;placed=1}}
   lanes.forEach(function(l,i){
    var n=cnt[i];if(n<=0)return;var t=cur(l);
    var a=t.numeric?t.start+l.used*t.size:null,b=t.numeric?Math.min(t.end,t.start+(l.used+n)*t.size-1):null,minutes=n*t.unitMin;
@@ -285,6 +285,21 @@ function apply(doc,action,actor,ctx){
   if(wasActive){var nx=activePlans(d)[0]||null;d.activeId=nx?nx.id:null}
   msg='計画「'+dpTitle+'」を削除';break;
  case 'delete_task':var t=task();if(d.records[t.id])fail('記録済みの取り組むことは削除できません');var wasEd=editable(t)&&t.date>=today;p.tasks=p.tasks.filter(function(x){return x.id!==a.taskId});if(wasEd){if(p.tasks.some(function(x){return x.name===t.name&&editable(x)&&!d.records[x.id]&&x.date>=today}))reflow(p,d.records,today,t.name,null,[[t.from,t.to]]);else p.leftovers=(p.leftovers||[]).concat([{text:labelOf(t,t.from,t.to),min:t.minutes}])}msg=t.name+'を予定から削除';break;
+ case 'add_material':
+  if(!p)fail('計画が見つかりません');if(p.type==='habit'||p.type==='task'||p.juken)fail('この計画には、教材を足せません');
+  var am=a.material||{},amn=text(am.name);if(!amn)fail('教材の名前を入力してください');var amats=p.input.materials=p.input.materials||[];
+  if(amats.some(function(m){return m.name===amn}))fail('同じ名前の教材が、すでにあります');if(amats.length>=10)fail('教材は10件までです');
+  var nmat={name:amn,subject:text(am.subject||'学習',30),from:number(am.from,1,100000),to:number(am.to,1,100000),unit:['ページ','問題の番号','単語の番号','枚'].indexOf(am.unit)>=0?am.unit:'ページ',minutes:number(am.minutes,1,60),provisional:false};
+  if(nmat.to<nmat.from)fail('終わりの番号は始めの番号以上にしてください');
+  // 今日以降の、空いている時間に、並行して並べる（すでにある予定の時間は、引く）
+  var inp2=copy(p.input);inp2.materials=[nmat];inp2.start=today<p.start?p.start:today;inp2.goal=p.goal;var a2=normalize(inp2,today),row2=rowOf(a2),bt=E._internal.buildDays(a2.start,a2.end,row2);
+  bt.days.forEach(function(dy){var used=p.tasks.reduce(function(m,t){return t.date===dy.date?m+(t.minutes||0):m},0);dy.cap=Math.max(0,dy.cap-used);if(used>0)dy.noForce=true});
+  var alo=fillPar(bt.days,materialsOf(a2,row2)),an=0;bt.days.forEach(function(dy){dy.items.forEach(function(t){p.tasks.push({id:ctx.id+'-m'+(an++),date:dy.date,name:t.name,subject:t.subject,text:t.text,from:t.from,to:t.to,unit:t.unit,minutes:t.min})})});
+  p.tasks.sort(function(x,y){return x.date<y.date?-1:x.date>y.date?1:0});amats.push(nmat);p.leftovers=(p.leftovers||[]).concat(alo);msg='教材を追加：'+amn;break;
+ case 'drop_material':
+  if(!p)fail('計画が見つかりません');if(p.type==='habit'||p.type==='task'||p.juken)fail('この計画では、教材を外せません');
+  var dn=text(a.name),dmats=p.input.materials||[];if(!dmats.some(function(m){return m.name===dn}))fail('その教材は、この計画にありません');if(dmats.length<=1)fail('教材が1つだけのときは、外せません。計画ごと削除してください');
+  p.tasks=p.tasks.filter(function(t){return t.name!==dn||d.records[t.id]});p.input.materials=dmats.filter(function(m){return m.name!==dn});p.leftovers=(p.leftovers||[]).filter(function(l){return String(l.text).indexOf(dn)!==0});msg='教材を外しました：'+dn;break;
  case 'add_task':if(!p)fail('計画が見つかりません');var dt=date(a.date);if(dt<today||dt>p.goal)fail('追加する日付を確認してください');var nm=text(a.name);if(!nm)fail('教材名を入力してください');
   if(a.unit&&p.type!=='habit'){if(['ページ','問題の番号','単語の番号'].indexOf(a.unit)<0)fail('数え方を確認してください');var mats=p.input.materials=p.input.materials||[];if(mats.some(function(m){return m.name===nm}))fail('同じ名前の教材が、すでにあります。「予定を直す」で、範囲を変えてください');if(mats.length>=10)fail('教材は10件までです');var f0=number(a.from,1,100000),e0=number(a.to,f0,100000),um=number(a.unitMinutes==null||a.unitMinutes===''?5:a.unitMinutes,1,60),sj=text(a.subject||'学習',30);mats.push({name:nm,subject:sj,from:f0,to:e0,unit:a.unit,minutes:um});var nt={id:ctx.id,date:dt,name:nm,subject:sj,from:f0,to:e0,unit:a.unit,text:'',minutes:0};nt.text=labelOf(nt,f0,e0);nt.minutes=taskMin(p,nt,f0,e0);p.tasks.push(nt);msg='取り組むことを追加';break}
   p.tasks.push({id:ctx.id,date:dt,name:nm,subject:text(a.subject||'学習',30),text:text(a.text||nm,200),minutes:number(a.minutes,1,360),from:null,to:null,unit:''});msg='取り組むことを追加';break;
