@@ -149,7 +149,7 @@ function build(input,today,id){
 function doneRange(t,rec){
  if(!rec||rec.mode==='none')return null;
  if(t.from==null||t.to==null)return rec.mode==='done'?[0,0]:null;           // 番号のない取り組むことは、「できた」のときだけ終わり
- if(rec.mode==='done')return [t.from,t.to];
+ if(rec.mode==='done')return [t.from,rec.position!=null&&rec.position>t.to?rec.position:t.to];
  return rec.position!=null&&rec.position>=t.from?[t.from,Math.min(rec.position,t.to)]:null;
 }
 function subtract(list,lo,hi){var out=[];list.forEach(function(r){if(hi<r[0]||lo>r[1]){out.push(r);return}if(lo>r[0])out.push([r[0],lo-1]);if(hi<r[1])out.push([hi+1,r[1]])});return out}
@@ -296,8 +296,9 @@ function apply(doc,action,actor,ctx){
  case 'pause_plan':if(!p)fail('計画が見つかりません');if(p.status!=='active')fail('進行中の計画だけ、一時停止できます');p.status='paused';p.pausedAt=today;p.resumeAfter=null;if(d.activeId===p.id){var nx0=activePlans(d)[0];d.activeId=nx0?nx0.id:p.id}msg='計画「'+p.title+'」を一時停止';break;
  case 'set_profile':d.profile=validateProfile(a.profile);msg='勉強に使える時間を変更';break;
  case 'activate':if(!p)fail('計画が見つかりません');shiftPaused(p,d,today);p.status='active';p.resumeAfter=null;d.activeId=p.id;msg='計画「'+p.title+'」を再開';break;
- case 'report':var t=task();if(actor.role==='teacher')fail('記録は生徒の画面から行ってください');if(t.date>today)fail('未来の日の実績は記録できません');if(['done','partial','none'].indexOf(a.mode)<0)fail('記録の種類を確認してください');var end=a.mode==='partial'?(a.position==null&&t.from==null?null:number(a.position,t.from==null?0:t.from,t.to==null?180:t.to)):null;var rmode=a.mode;if(rmode==='partial'&&t.to!=null&&end!=null&&end>=t.to){rmode='done';end=null}   // 途中まで、で、最後まで入れたら、全部できたことにする
- d.records[t.id]={mode:rmode,position:end,date:t.date,updatedAt:now};msg=t.name+'の進み具合を記録';if(a.carry&&t.from==null&&a.mode!=='done'){var nd=add(today,1);if(nd>p.goal)fail('計画の終了日を過ぎるため、明日には回せません');p.tasks.push({id:ctx.id+'-c',date:nd,name:t.name,subject:t.subject,text:t.text+'（続き）',minutes:t.minutes,from:null,to:null,unit:''})}break;
+ case 'report':var t=task();if(actor.role==='teacher')fail('記録は生徒の画面から行ってください');if(t.date>today)fail('未来の日の実績は記録できません');if(['done','partial','none'].indexOf(a.mode)<0)fail('記録の種類を確認してください');var end=a.mode==='partial'?(a.position==null&&t.from==null?null:number(a.position,t.from==null?0:t.from,t.to==null?180:Math.max(t.to,((p.input.materials||[]).find(function(m){return m.name===t.name})||{to:t.to}).to))):null;var rmode=a.mode;if(rmode==='partial'&&t.to!=null&&end!=null&&end>=t.to){rmode='done';if(end>t.to){var xe=end,xs=t.to+1;p.tasks=p.tasks.filter(function(x){return !(x.id!==t.id&&x.name===t.name&&editable(x)&&!d.records[x.id]&&x.from>=xs&&x.to<=xe)});p.tasks.forEach(function(x){if(x.id!==t.id&&x.name===t.name&&editable(x)&&!d.records[x.id]&&x.from<=xe&&x.to>xe){x.from=xe+1;x.text=labelOf(x,x.from,x.to);x.minutes=taskMin(p,x,x.from,x.to)}})}else end=null}/* 途中まで、で最後まで入れたら全部できた。先まで入れたら、先にやった分を、あとの取り組むことから消す */   // 途中まで、で、最後まで入れたら、全部できたことにする
+ var prevRec=d.records[t.id];d.records[t.id]={mode:rmode,position:end,date:t.date,updatedAt:now};
+ if(prevRec&&prevRec.mode==='done'&&prevRec.position!=null&&t.to!=null&&prevRec.position>t.to&&!(end!=null&&end>=prevRec.position)&&p.type!=='habit'&&p.type!=='task'&&!p.juken)relayFuture(p,d,today,ctx,'x');/* 先にやった分を取り消したら、あとの取り組むことに戻す */msg=t.name+'の進み具合を記録';if(a.carry&&t.from==null&&a.mode!=='done'){var nd=add(today,1);if(nd>p.goal)fail('計画の終了日を過ぎるため、明日には回せません');p.tasks.push({id:ctx.id+'-c',date:nd,name:t.name,subject:t.subject,text:t.text+'（続き）',minutes:t.minutes,from:null,to:null,unit:''})}break;
  case 'study_time':if(actor.role==='teacher')fail('学習時間は生徒が記録します');date(a.date);if(a.date>today)fail('未来の学習時間は記録できません');d.records['time:'+a.date]={minutes:number(a.minutes,0,1440),updatedAt:now};msg='勉強時間を記録';break;
  case 'edit_task':var t=task();if(d.records[t.id])fail('記録済みの取り組むことは変更できません');t.date=date(a.date);if(t.date<today||t.date>p.goal)fail('移動先は今日から計画終了日までにしてください');
   if(editable(t)){var size=a.to!=null?number(a.to,t.from,100000)-t.from+1:t.to-t.from+1,rf=reflow(p,d.records,today,t.name,{id:t.id,size:size});msg=t.name+'の日割りを変更'+(rf.grown?'（最後の取り組むことが'+rf.grown+'増えました）':'')}
