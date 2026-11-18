@@ -317,6 +317,11 @@ function apply(doc,action,actor,ctx){
  case 'add_task':if(!p)fail('計画が見つかりません');var dt=date(a.date);if(dt<today||dt>p.goal)fail('追加する日付を確認してください');var nm=text(a.name);if(!nm)fail('教材名を入力してください');
   if(a.unit&&p.type!=='habit'){if(['ページ','問題の番号','単語の番号'].indexOf(a.unit)<0)fail('数え方を確認してください');var mats=p.input.materials=p.input.materials||[];if(mats.some(function(m){return m.name===nm}))fail('同じ名前の教材が、すでにあります。「予定を直す」で、範囲を変えてください');if(mats.length>=10)fail('教材は10個までです');var f0=number(a.from,1,100000),e0=number(a.to,f0,100000),um=number(a.unitMinutes==null||a.unitMinutes===''?5:a.unitMinutes,1,60),sj=text(a.subject||'学習',30);mats.push({name:nm,subject:sj,from:f0,to:e0,unit:a.unit,minutes:um});var nt={id:ctx.id,date:dt,name:nm,subject:sj,from:f0,to:e0,unit:a.unit,text:'',minutes:0};nt.text=labelOf(nt,f0,e0);nt.minutes=taskMin(p,nt,f0,e0);p.tasks.push(nt);msg='取り組むことを追加';break}
   p.tasks.push({id:ctx.id,date:dt,name:nm,subject:text(a.subject||'学習',30),text:text(a.text||nm,200),minutes:number(a.minutes,1,360),from:null,to:null,unit:''});msg='取り組むことを追加';break;
+ case 'rest_today':
+  if(!p||p.status!=='active')fail('進行中の計画だけ、休めます');var rtk=p.tasks.filter(function(t){return t.date===today&&!d.records[t.id]});if(!rtk.length)fail('今日は、休める予定がありません');
+  if(p.type==='habit'||p.juken){rtk.forEach(function(t){d.records[t.id]={mode:'none',position:null,date:t.date,updatedAt:now}});msg='今日は休む（今日の予定を、やらなかったにした）';break}
+  // 今日を、勉強しない日にして、今日の予定を、これからの日に組み直す
+  p.input.busyDates=(p.input.busyDates||[]).concat([{from:today,to:''}]);var rrp=replan(p,d.records,today,ctx.id);p.tasks=rrp.tasks;p.leftovers=rrp.leftovers;p.replannedAt=today;msg='今日は休む（今日の予定を、あとの日に回した）';break;
  case 'move_day':if(!p)fail('計画が見つかりません');var dest=date(a.date);if(dest<=today||dest>p.goal)fail('移動先は明日以降、計画終了日までにしてください');var moving=p.tasks.filter(function(t){return t.date===today&&!d.records[t.id]});if(!moving.length)fail('今日から移せる予定がありません');moving.forEach(function(t){t.date=dest});msg='今日の未記録の予定を'+dest+'へ移動';break;
  case 'rebuild':if(!p)fail('計画が見つかりません');var input=withProfile(d,a.input);input.start=(a.input&&a.input.start&&a.input.start>today)?a.input.start:today;   // 開始日を先にしたら、その日から。それ以外は、今日から
 var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
