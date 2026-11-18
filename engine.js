@@ -400,7 +400,7 @@
     return {
       style: 'CP', styleLabel: '習慣あり（タスク消化）', title: 'この1週間の課題・タスク', header: header(row, opts, start),
       cards: [
-        { label: '① 今週やること', big: tasks.length + '件', lines: list.slice(0, 4).map(function (t) { return t.name + (t.due ? '（提出 ' + t.due + '）' : ''); }) },
+        { label: '① 今週取り組むこと', big: tasks.length + '個', lines: list.slice(0, 4).map(function (t) { return t.name + (t.due ? '（提出 ' + t.due + '）' : ''); }) },
         estimateCard(tasks, built.days, leftovers),
         timeCard(row, built)
       ],
