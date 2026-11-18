@@ -57,7 +57,7 @@ function rowOf(a){
  return row;
 }
 function materialsOf(a,row){var mats=E._internal.readMaterials(row);mats.forEach(function(m,i){m.unitMin=Math.ceil(a.materials[i].minutes*1.5);m.unitRaw=a.materials[i].minutes;m.provisional=false});return mats}
-// ---------- 上段（教材ごとの期間）から、下段（日ごとのやること）を作る／下段の実績を、上段に返す ----------
+// ---------- 上段（教材ごとの期間）から、下段（日ごとの取り組むこと）を作る／下段の実績を、上段に返す ----------
 function unitInfo(u){
  if(u==='ページ')return {u:'ページ',f:function(x,y){return 'p.'+x+(y>x?'〜'+y:'')}};
  if(u==='題'||u==='問')return {u:'問題の番号',f:function(x,y){return 'No.'+x+(y>x?'〜'+y:'')}};
@@ -68,7 +68,7 @@ function unitInfo(u){
 function winEnd(a,from){var l=a.end||a.goal,w=add(from,13);return w<l?w:l}
 function tasksFromRoute(a,id,plans,fromDate,tag,until){
  var limit=a.end||a.goal,outLimit=until||winEnd(a,fromDate),maxTo=fromDate;plans.forEach(function(sp){if(!sp.missing)sp.items.forEach(function(it){if(!it.finished&&it.to>maxTo)maxTo=it.to})});
- var days=E._internal.buildDays(fromDate,maxTo>limit?maxTo:limit,rowOf(a)).days.filter(function(d){return d.kind==='study'&&d.cap>0}),out=[],n=0;      // 量は、教材の期間の全体（計画の終了日を過ぎても）に割り、計画の終了日までの分だけ、やることにする
+ var days=E._internal.buildDays(fromDate,maxTo>limit?maxTo:limit,rowOf(a)).days.filter(function(d){return d.kind==='study'&&d.cap>0}),out=[],n=0;      // 量は、教材の期間の全体（計画の終了日を過ぎても）に割り、計画の終了日までの分だけ、取り組むことにする
  plans.forEach(function(sp){if(sp.missing)return;sp.items.forEach(function(it){
   if(it.finished||!it.total)return;var done=it.doneUnits||0,remain=it.total-done;if(remain<=0)return;
   var lo0=it.from<fromDate?fromDate:it.from,ds=days.filter(function(d){return d.date>=lo0&&d.date<=it.to});if(!ds.length)return;var ui=unitInfo(it.unit);
@@ -88,7 +88,7 @@ function syncUpper(p,records,today){
    else{it.finished=false;if(it.doneUnits>0||it.from<=today)it.weeks=Math.max(1,Math.ceil((it.total-it.doneUnits)/(it.pace*(it.speed||1))))}});
   JC.relayoutFrom(sp,today,p.juken.examYm)});
 }
-// 上段を直したあと：今日以降で、記録のない日ごとのやることを作り直す。過去の未記録には「組み直し済み」の印
+// 上段を直したあと：今日以降で、記録のない日ごとの取り組むことを作り直す。過去の未記録には「組み直し済み」の印
 function regenTasks(p,records,today,tag,keepMiss){
  if(!keepMiss)p.tasks.forEach(function(t){if(t.item!==undefined&&t.date<today&&!records[t.id]&&!t.rescheduled)t.rescheduled=today});
  var keep=p.tasks.filter(function(t){return t.item===undefined||t.date<today||records[t.id]}),fresh=tasksFromRoute(p.input,p.id,p.juken.materials,today<p.start?p.start:today,tag);
@@ -172,7 +172,7 @@ function replan(p,records,today,id){
 }
 
 // ---------- 進み具合（達成率・遅れ・連続記録）----------
-// 達成率は、やることの数ではなく、時間（量）で数える：できた＝全部、途中まで＝位置から割合、やらなかった・記録なし＝0。今日までの予定が分母
+// 達成率は、取り組むことの数ではなく、時間（量）で数える：できた＝全部、途中まで＝位置から割合、やらなかった・記録なし＝0。今日までの予定が分母
 function fraction(t,rec){
  if(!rec||rec.mode==='none')return 0;if(rec.mode==='done')return 1;
  if(t.from==null||t.to==null||rec.position==null||t.to<t.from)return 0;
@@ -210,7 +210,7 @@ function pctText(v){return v==null?'—':v+'%'}
 function printHtml(doc,plan,name,today){
  var rec=doc.records||{},g=progressOf(doc,plan,today)||{achievement:{}},end=plan.end||plan.goal,a=g.achievement||{};
  var h='<html><head><meta charset="utf-8"><style>@page{size:A4;margin:12mm}body{font-family:sans-serif;font-size:10pt;color:#222}h1{font-size:18pt;margin:0 0 4px}h2{font-size:12pt;margin:16px 0 6px;border-bottom:2px solid #f28c28;padding-bottom:2px}h3{font-size:10.5pt;margin:12px 0 4px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ccc;padding:5px 7px;text-align:left;vertical-align:top}th{background:#fdeedd}tr{page-break-inside:avoid}.sub{color:#666;margin:2px 0}.warn{color:#b26a00}.lt{color:#888}</style></head><body>';
- h+='<h1>'+esc(plan.title)+'</h1><p class="sub">'+esc(name)+'　'+md(plan.start)+'〜'+md(plan.goal)+(end!==plan.goal?'（やることは、'+md(end)+'まで。前日は見直し）':'')+'　作成：'+esc(today)+'</p>';
+ h+='<h1>'+esc(plan.title)+'</h1><p class="sub">'+esc(name)+'　'+md(plan.start)+'〜'+md(plan.goal)+(end!==plan.goal?'（取り組むことは、'+md(end)+'まで。前日は見直し）':'')+'　作成：'+esc(today)+'</p>';
  if(plan.target)h+='<p class="sub">目標：'+esc(plan.target)+'</p>';
  (plan.warnings||[]).forEach(function(w){h+='<p class="warn">'+esc(w)+'</p>'});
  h+='<h2>進み具合</h2><table><tr><th>今週</th><th>先週</th><th>先々週</th><th>ここまでの全体</th><th>記録の連続</th><th>遅れ</th></tr><tr><td>'+pctText(a.thisWeek)+'</td><td>'+pctText(a.lastWeek)+'</td><td>'+pctText(a.twoWeeksAgo)+'</td><td>'+pctText(a.overall)+'</td><td>'+(g.streak||0)+'日</td><td>'+(g.missedCount?g.missedCount+'件（約'+g.missedMinutes+'分）':'なし')+'</td></tr></table>';
@@ -219,11 +219,11 @@ function printHtml(doc,plan,name,today){
  h+='<h2>日ごとの計画と実績</h2>';
  var tasks=plan.tasks.slice().sort(function(x,y){return x.date<y.date?-1:x.date>y.date?1:(x.id<y.id?-1:1)}),weeks={},order=[];
  tasks.forEach(function(t){var k=week(t.date);if(!weeks[k]){weeks[k]=[];order.push(k)}weeks[k].push(t)});
- if(!tasks.length)h+='<p class="sub">やることはありません。</p>';
+ if(!tasks.length)h+='<p class="sub">取り組むことはありません。</p>';
  order.forEach(function(k){
   var ts=weeks[k],mins=ts.reduce(function(s2,t){return s2+t.minutes},0),pc=k<=today?pctOf(plan,rec,k,add(k,6),today):null,times=[];
   for(var i=0;i<7;i++){var r=rec['time:'+add(k,i)];if(r)times.push(md(add(k,i))+' '+r.minutes+'分')}
-  h+='<h3>'+md(k)+'〜'+md(add(k,6))+(k===week(today)?'（今週）':'')+'　計画 約'+mins+'分'+(pc==null?'':'　達成 '+pc+'%')+'</h3><table><tr><th style="width:15%">日付</th><th>やること</th><th style="width:11%">目安</th><th style="width:19%">結果</th></tr>';
+  h+='<h3>'+md(k)+'〜'+md(add(k,6))+(k===week(today)?'（今週）':'')+'　計画 約'+mins+'分'+(pc==null?'':'　達成 '+pc+'%')+'</h3><table><tr><th style="width:15%">日付</th><th>取り組むこと</th><th style="width:11%">目安</th><th style="width:19%">結果</th></tr>';
   ts.forEach(function(t){var l=recLabel(t,rec[t.id],today);h+='<tr><td>'+md(t.date)+'（'+dowOf(t.date)+'）</td><td>'+esc(t.text)+'</td><td>'+t.minutes+'分</td><td'+(l==='未記録'?' class="warn"':l==='組み直し済み'?' class="lt"':'')+'>'+esc(l)+'</td></tr>'});
   h+='</table>'+(times.length?'<p class="sub">勉強時間の記録：'+esc(times.join('、'))+'</p>':'');
  });
@@ -264,26 +264,27 @@ function remainingMaterials(p,records){
 }
 function apply(doc,action,actor,ctx){
  var d=copy(doc),a=action||{},p=d.plans.find(function(p){return p.id===a.planId}),msg='',now=ctx.now,today=ctx.today;
- function task(){if(!p)fail('計画が見つかりません');var t=p.tasks.find(function(t){return t.id===a.taskId});if(!t)fail('やることが見つかりません');return t}
+ function task(){if(!p)fail('計画が見つかりません');var t=p.tasks.find(function(t){return t.id===a.taskId});if(!t)fail('取り組むことが見つかりません');return t}
  switch(a.type){
  case 'create':
   p=build(withProfile(d,a.input),today,ctx.id);if(d.plans.length>=8)fail('テスト環境では計画は8件までです');d.plans.push(p);d.activeId=p.id;msg='計画「'+p.title+'」を作成';break;
  case 'pause_plan':if(!p)fail('計画が見つかりません');if(p.status!=='active')fail('進行中の計画だけ、一時停止できます');p.status='paused';p.pausedAt=today;p.resumeAfter=null;if(d.activeId===p.id){var nx0=activePlans(d)[0];d.activeId=nx0?nx0.id:p.id}msg='計画「'+p.title+'」を一時停止';break;
  case 'set_profile':d.profile=validateProfile(a.profile);msg='勉強に使える時間を変更';break;
  case 'activate':if(!p)fail('計画が見つかりません');shiftPaused(p,d,today);p.status='active';p.resumeAfter=null;d.activeId=p.id;msg='計画「'+p.title+'」を再開';break;
- case 'report':var t=task();if(actor.role==='teacher')fail('記録は生徒の画面から行ってください');if(t.date>today)fail('未来の日の実績は記録できません');if(['done','partial','none'].indexOf(a.mode)<0)fail('記録の種類を確認してください');var end=a.mode==='partial'?(a.position==null&&t.from==null?null:number(a.position,t.from==null?0:t.from,t.to==null?180:t.to)):null;d.records[t.id]={mode:a.mode,position:end,date:t.date,updatedAt:now};msg=t.name+'の進み具合を記録';if(a.carry&&t.from==null&&a.mode!=='done'){var nd=add(today,1);if(nd>p.goal)fail('計画の終了日を過ぎるため、明日には回せません');p.tasks.push({id:ctx.id+'-c',date:nd,name:t.name,subject:t.subject,text:t.text+'（続き）',minutes:t.minutes,from:null,to:null,unit:''})}break;
+ case 'report':var t=task();if(actor.role==='teacher')fail('記録は生徒の画面から行ってください');if(t.date>today)fail('未来の日の実績は記録できません');if(['done','partial','none'].indexOf(a.mode)<0)fail('記録の種類を確認してください');var end=a.mode==='partial'?(a.position==null&&t.from==null?null:number(a.position,t.from==null?0:t.from,t.to==null?180:t.to)):null;var rmode=a.mode;if(rmode==='partial'&&t.to!=null&&end!=null&&end>=t.to){rmode='done';end=null}   // 途中まで、で、最後まで入れたら、全部できたことにする
+ d.records[t.id]={mode:rmode,position:end,date:t.date,updatedAt:now};msg=t.name+'の進み具合を記録';if(a.carry&&t.from==null&&a.mode!=='done'){var nd=add(today,1);if(nd>p.goal)fail('計画の終了日を過ぎるため、明日には回せません');p.tasks.push({id:ctx.id+'-c',date:nd,name:t.name,subject:t.subject,text:t.text+'（続き）',minutes:t.minutes,from:null,to:null,unit:''})}break;
  case 'study_time':if(actor.role==='teacher')fail('学習時間は生徒が記録します');date(a.date);if(a.date>today)fail('未来の学習時間は記録できません');d.records['time:'+a.date]={minutes:number(a.minutes,0,1440),updatedAt:now};msg='勉強時間を記録';break;
- case 'edit_task':var t=task();if(d.records[t.id])fail('記録済みのやることは変更できません');t.date=date(a.date);if(t.date<today||t.date>p.goal)fail('移動先は今日から計画終了日までにしてください');
+ case 'edit_task':var t=task();if(d.records[t.id])fail('記録済みの取り組むことは変更できません');t.date=date(a.date);if(t.date<today||t.date>p.goal)fail('移動先は今日から計画終了日までにしてください');
   if(editable(t)){var size=a.to!=null?number(a.to,t.from,100000)-t.from+1:t.to-t.from+1,rf=reflow(p,d.records,today,t.name,{id:t.id,size:size});msg=t.name+'の日割りを変更'+(rf.grown?'（最後の予定が'+rf.grown+'増えました）':'')}
   else if(t.item){msg=t.name+'の日割りを変更'}
-  else{t.text=text(a.text,200);if(!t.text)fail('やることを入力してください');t.minutes=number(a.minutes,1,360);msg=t.name+'の日割りを変更'}break;
+  else{t.text=text(a.text,200);if(!t.text)fail('取り組むことを入力してください');t.minutes=number(a.minutes,1,360);msg=t.name+'の日割りを変更'}break;
  case 'delete_plan':if(!p)fail('計画が見つかりません');var dpTitle=p.title,wasActive=d.activeId===p.id;p.tasks.forEach(function(t){delete d.records[t.id]});d.plans=d.plans.filter(function(q){return q.id!==p.id});
   if(wasActive){var nx=activePlans(d)[0]||null;d.activeId=nx?nx.id:null}
   msg='計画「'+dpTitle+'」を削除';break;
- case 'delete_task':var t=task();if(d.records[t.id])fail('記録済みのやることは削除できません');var wasEd=editable(t)&&t.date>=today;p.tasks=p.tasks.filter(function(x){return x.id!==a.taskId});if(wasEd){if(p.tasks.some(function(x){return x.name===t.name&&editable(x)&&!d.records[x.id]&&x.date>=today}))reflow(p,d.records,today,t.name,null,[[t.from,t.to]]);else p.leftovers=(p.leftovers||[]).concat([{text:labelOf(t,t.from,t.to),min:t.minutes}])}msg=t.name+'を予定から削除';break;
+ case 'delete_task':var t=task();if(d.records[t.id])fail('記録済みの取り組むことは削除できません');var wasEd=editable(t)&&t.date>=today;p.tasks=p.tasks.filter(function(x){return x.id!==a.taskId});if(wasEd){if(p.tasks.some(function(x){return x.name===t.name&&editable(x)&&!d.records[x.id]&&x.date>=today}))reflow(p,d.records,today,t.name,null,[[t.from,t.to]]);else p.leftovers=(p.leftovers||[]).concat([{text:labelOf(t,t.from,t.to),min:t.minutes}])}msg=t.name+'を予定から削除';break;
  case 'add_task':if(!p)fail('計画が見つかりません');var dt=date(a.date);if(dt<today||dt>p.goal)fail('追加する日付を確認してください');var nm=text(a.name);if(!nm)fail('教材名を入力してください');
-  if(a.unit&&p.type!=='habit'){if(['ページ','問題の番号','単語の番号'].indexOf(a.unit)<0)fail('数え方を確認してください');var mats=p.input.materials=p.input.materials||[];if(mats.some(function(m){return m.name===nm}))fail('同じ名前の教材が、すでにあります。「予定を直す」で、範囲を変えてください');if(mats.length>=10)fail('教材は10件までです');var f0=number(a.from,1,100000),e0=number(a.to,f0,100000),um=number(a.unitMinutes==null||a.unitMinutes===''?5:a.unitMinutes,1,60),sj=text(a.subject||'学習',30);mats.push({name:nm,subject:sj,from:f0,to:e0,unit:a.unit,minutes:um});var nt={id:ctx.id,date:dt,name:nm,subject:sj,from:f0,to:e0,unit:a.unit,text:'',minutes:0};nt.text=labelOf(nt,f0,e0);nt.minutes=taskMin(p,nt,f0,e0);p.tasks.push(nt);msg='やることを追加';break}
-  p.tasks.push({id:ctx.id,date:dt,name:nm,subject:text(a.subject||'学習',30),text:text(a.text||nm,200),minutes:number(a.minutes,1,360),from:null,to:null,unit:''});msg='やることを追加';break;
+  if(a.unit&&p.type!=='habit'){if(['ページ','問題の番号','単語の番号'].indexOf(a.unit)<0)fail('数え方を確認してください');var mats=p.input.materials=p.input.materials||[];if(mats.some(function(m){return m.name===nm}))fail('同じ名前の教材が、すでにあります。「予定を直す」で、範囲を変えてください');if(mats.length>=10)fail('教材は10件までです');var f0=number(a.from,1,100000),e0=number(a.to,f0,100000),um=number(a.unitMinutes==null||a.unitMinutes===''?5:a.unitMinutes,1,60),sj=text(a.subject||'学習',30);mats.push({name:nm,subject:sj,from:f0,to:e0,unit:a.unit,minutes:um});var nt={id:ctx.id,date:dt,name:nm,subject:sj,from:f0,to:e0,unit:a.unit,text:'',minutes:0};nt.text=labelOf(nt,f0,e0);nt.minutes=taskMin(p,nt,f0,e0);p.tasks.push(nt);msg='取り組むことを追加';break}
+  p.tasks.push({id:ctx.id,date:dt,name:nm,subject:text(a.subject||'学習',30),text:text(a.text||nm,200),minutes:number(a.minutes,1,360),from:null,to:null,unit:''});msg='取り組むことを追加';break;
  case 'move_day':if(!p)fail('計画が見つかりません');var dest=date(a.date);if(dest<=today||dest>p.goal)fail('移動先は明日以降、計画終了日までにしてください');var moving=p.tasks.filter(function(t){return t.date===today&&!d.records[t.id]});if(!moving.length)fail('今日から移せる予定がありません');moving.forEach(function(t){t.date=dest});msg='今日の未記録の予定を'+dest+'へ移動';break;
  case 'rebuild':if(!p)fail('計画が見つかりません');var input=withProfile(d,a.input);input.start=today;var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
   if(p.juken){var jn=build(input,today,ctx.id);retained.forEach(function(t){if(!d.records[t.id]&&t.date<today)t.rescheduled=today});jn.juken.reviews=p.juken.reviews||[];jn.juken.lastReview=p.juken.lastReview||null;var keepRoad=p.roadmapEdited?p.roadmap:null;
