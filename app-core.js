@@ -95,6 +95,37 @@ function regenTasks(p,records,today,tag,keepMiss){
  p.tasks=keep.concat(fresh).sort(function(x,y){return x.date<y.date?-1:x.date>y.date?1:0});p.tasksUntil=winEnd(p.input,today<p.start?p.start:today);
 }
 function hwWarnings(a,tasks,remaining){var w=[];if(a.type!=='task')return w;var mdd=function(x){return Number(x.slice(5,7))+'/'+Number(x.slice(8,10))};a.homeworks.forEach(function(h){var last='';tasks.forEach(function(t){if(t.name===h.name&&t.date>last)last=t.date});var left=(remaining||[]).some(function(l){return String(l.text).indexOf(h.name)===0});if(left||(last&&last>h.due))w.push('「'+h.name+'」は、提出日（'+mdd(h.due)+'）までに終わりません。削るものを、講師と決めてください');if(h.unitMin==null)w.push('「'+h.name+'」の1ページの時間は、仮の値です。実際に計って、直してください')});return w}
+// ---------- 教材を並行して進める（定期テスト・検定）----------
+// 決めたこと：教材は、前から順ではなく、毎日、残りの量に応じて、時間を分け合って進める（残りが多い教材ほど、多く）。どの教材も、同じころに終わる。
+// 1日の時間が余れば、残りが多い教材に1ページずつ足す。1日に1つも置けないときは、その日の最初の1つだけ置く。
+function fillPar(days,tasks){
+ var lanes=[],by={};
+ tasks.forEach(function(t){var l=by[t.name];if(!l){l=by[t.name]={segs:[],si:0,used:0};lanes.push(l)}l.segs.push(t)});
+ function cur(l){return l.si<l.segs.length?l.segs[l.si]:null}
+ function rem(l){var r=0;for(var i=l.si;i<l.segs.length;i++)r+=(i===l.si?l.segs[i].units-l.used:l.segs[i].units)*l.segs[i].unitMin;return r}
+ function room(l,c){var t=cur(l);return t?t.units-l.used-c:0}
+ days.forEach(function(day){
+  if(day.kind!=='study'||day.cap<=0)return;
+  var left=day.cap,cnt=lanes.map(function(){return 0}),placed=0;
+  for(var round=0;round<6&&left>0;round++){
+   var tot=0;lanes.forEach(function(l,i){tot+=Math.max(0,rem(l)-cnt[i]*(cur(l)?cur(l).unitMin:0))});if(tot<=0)break;
+   var before=placed,L=left;
+   lanes.forEach(function(l,i){var t=cur(l);if(!t)return;var r=rem(l)-cnt[i]*t.unitMin,n=Math.min(Math.floor(L*r/tot/t.unitMin),room(l,cnt[i]));if(n>0){cnt[i]+=n;left-=n*t.unitMin;placed+=n}});
+   for(;;){var bi=-1,br=0;lanes.forEach(function(l,i){var t=cur(l);if(!t||room(l,cnt[i])<=0||t.unitMin>left)return;var r=rem(l)-cnt[i]*t.unitMin;if(r>br){br=r;bi=i}});if(bi<0)break;cnt[bi]++;left-=cur(lanes[bi]).unitMin;placed++}
+   if(placed===before)break;
+  }
+  if(!placed){var bi2=-1,br2=0;lanes.forEach(function(l,i){if(cur(l)&&rem(l)>br2){br2=rem(l);bi2=i}});if(bi2>=0){cnt[bi2]=1;placed=1}}
+  lanes.forEach(function(l,i){
+   var n=cnt[i];if(n<=0)return;var t=cur(l);
+   var a=t.numeric?t.start+l.used*t.size:null,b=t.numeric?Math.min(t.end,t.start+(l.used+n)*t.size-1):null,minutes=n*t.unitMin;
+   day.items.push({text:t.label(a,b),min:minutes,subject:t.subject,provisional:t.provisional,name:t.name,from:a,to:b,unit:t.unit});day.minutes+=minutes;
+   l.used+=n;if(l.used>=t.units){l.si++;l.used=0}
+  });
+ });
+ var leftovers=[];
+ lanes.forEach(function(l){for(var i=l.si;i<l.segs.length;i++){var t2=l.segs[i],u0=i===l.si?l.used:0,rest=t2.units-u0;if(rest<=0)continue;var a2=t2.numeric?t2.start+u0*t2.size:null,b2=t2.numeric?t2.end:null;leftovers.push({text:t2.label(a2,b2),min:rest*t2.unitMin})}});
+ return leftovers;
+}
 function build(input,today,id){
  var a=normalize(input,today),row=rowOf(a);
  // The engine accepts enumerated measured minutes; preserve arbitrary numeric inputs by using its read-material objects below.
@@ -102,7 +133,7 @@ function build(input,today,id){
  var remaining=[];
  if(a.type==='habit'){
   built.days.forEach(function(d){var m=a.habit.menu[d.dow];if(!m||m==='休み')return;var av=a.availability[d.dow],minutes=Math.min(a.habit.goalMin,av||a.habit.goalMin);d.items.push({text:m+' ・ '+minutes+'分',name:m,subject:m,min:minutes,from:null,to:null,unit:'分'})});
- }else{remaining=E._internal.fill(built.days,mats)}
+ }else{remaining=a.type==='task'?E._internal.fill(built.days,mats):fillPar(built.days,mats)}
  var tasks=[];built.days.forEach(function(d){d.items.forEach(function(t){tasks.push({id:id+'-'+tasks.length,date:d.date,name:t.name,subject:t.subject,text:t.text,from:t.from,to:t.to,unit:t.unit,minutes:t.min})})});
  var jk=null,rm,wm=a.juken&&a.juken.autoTasks?Math.max(30,Math.round(a.availability.reduce(function(x,y){return x+y},0)/Math.max(1,a.juken.subjects.length))):undefined;
  if(a.juken){var jp=JC.plan({weeklyMinutes:wm,band:a.juken.band,others:a.juken.others,univ:{dev:a.juken.dev},mock:a.juken.mockType&&a.juken.mockScore!=null?{type:a.juken.mockType,score:a.juken.mockScore}:null,start:a.start,examYm:a.juken.examYm,route:a.juken.route||undefined,subjects:a.juken.subjects,owned:a.juken.owned});rm=jp.roadmap;if(a.juken.autoTasks){jp.materials.forEach(function(sp){(sp.items||[]).forEach(function(i){i.tracked=true})});tasks=tasksFromRoute(a,id,jp.materials,a.start,'u')}
@@ -135,7 +166,7 @@ function replan(p,records,today,id){
   left.forEach(function(r){queue.push(Object.assign({},m,{start:r[0],end:r[1],units:Math.ceil((r[1]-r[0]+1)/m.size)}))});
  });
  p.tasks.forEach(function(t){if(t.date<startDay&&!rec(t)&&names[t.name])t.rescheduled=today});   // 過去の未記録は「組み直し済み」の印（遅れとして数え続けない）
- var built=E._internal.buildDays(startDay,end,row),leftovers=E._internal.fill(built.days,queue),made=[];
+ var built=E._internal.buildDays(startDay,end,row),leftovers=(a.type==='task'?E._internal.fill:fillPar)(built.days,queue),made=[];
  built.days.forEach(function(d){d.items.forEach(function(t){made.push({id:p.id+'-r'+today+'-'+made.length,date:d.date,name:t.name,subject:t.subject,text:t.text,from:t.from,to:t.to,unit:t.unit,minutes:t.min})})});
  return {tasks:kept.concat(made).sort(function(x,y){return x.date<y.date?-1:x.date>y.date?1:0}),leftovers:leftovers,moved:made.length,startDay:startDay};
 }
