@@ -330,9 +330,9 @@ $('phone').addEventListener('click',async e=>{const b=e.target.closest('[data-ac
  if(a==='jaccept'){const sp0=(plan().juken.materials||[]).find(x=>x.subject===b.dataset.subject),it0=sp0&&sp0.items[Number(b.dataset.index)];if(it0&&it0.hold&&!await ask('確認が必要です',it0.hold.why+'\n本当にこの教材を計画に組み込みますか？','組み込む'))return}
  if(a==='jskip'||a==='jaccept'||a==='jreject'){const op={jskip:'skip',jaccept:'accept_hold',jreject:'reject_hold'}[a];return busy(async()=>{await mutate({type:'juken_adjust',planId:plan().id,ops:[{op,subject:b.dataset.subject,index:Number(b.dataset.index)}]});S.page='upper'})}
  if(a==='openTask'){S.openTask=S.openTask===b.dataset.id?null:b.dataset.id;S.taskId=S.openTask;S.partialOpen=false;S.carryMode=null;return render()}
- if(a==='carryAsk'){S.carryMode=b.dataset.mode;S.partialOpen=false;return render()}
+ if(a==='carryAsk'){S.carryMode=S.carryMode===b.dataset.mode?null:b.dataset.mode;S.partialOpen=false;return render()}
  if(a==='carryYes'||a==='carryNo'){const mode=S.carryMode;return busy(async()=>{await mutate({type:'report',planId:tplan().id,taskId:S.taskId,mode,carry:a==='carryYes'});S.openTask=null;S.carryMode=null;S.page='today'},a==='carryYes'?'記録しました。残りは明日に入れました':'記録しました')}
- if(a==='showPartial'){S.partialOpen=true;return render()}
+ if(a==='showPartial'){S.partialOpen=!S.partialOpen;return render()}
  if(a==='replan')return busy(async()=>{await mutate({type:'replan',planId:b.dataset.id||plan().id});S.page='today'},'組み直しました');
  if(a==='check')return busy(async()=>{await mutate({type:'check'});S.page='detail'});
  if(a==='quickDone'){S.taskId=b.dataset.id;S.openTask=b.dataset.id;return busy(async()=>{await mutate({type:'report',planId:tplan().id,taskId:S.taskId,mode:'done'});S.openTask=null;S.partialOpen=false;S.page='today'},'記録しました')}
