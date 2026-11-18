@@ -209,7 +209,6 @@ function overviewView(){const d=doc(),p=plan();if(!p)return noPlan();const g=C.p
  if(p.juken){const j=p.juken;h+=card('志望校から逆算','<p><b>'+esc(String(j.bandName||'').replace(/（.*?）/g,''))+'</b></p><p>'+esc(j.routeName||'')+'</p>'+(j.gap?'<p class="caption">目標との差：'+j.gap.gap+'（'+esc(j.gap.level)+'）</p>':''));
   (j.materials||[]).forEach(sp=>{h+=card(sp.subject+(sp.missing?'（ルートなし）':' · 全'+sp.totalWeeks+'週'),sp.missing?hint(sp.note):sp.items.map(it=>'<p><b>'+esc(it.name)+'</b><br><span class="caption">'+dj(it.from)+'〜'+dj(it.to)+'（'+it.weeks+'週）</span></p>').join(''))});
   h+=btn('教材のスケジュールを見る','page','secondary',{page:'upper'})}
- const av=inp.availability;if(av&&av.length===7)h+=card('1日に使える時間','<p class="caption">'+DAYS_JA.map((x,i)=>x+' '+(av[i]?hmTxt(av[i]):'休み')).join('　')+'</p>');
  if(p.leftovers&&p.leftovers.length)h+='<div class="alert"><b>期間内に終わらない範囲があります</b><br>'+p.leftovers.map(l=>esc(l.text)).join('<br>')+'</div>';
  const last=p.tasks.length?p.tasks.reduce((m,t)=>t.date>m?t.date:m,'0000'):'';
  h+='<h2 class="sec-title">取り組むこと（'+p.tasks.length+'個'+(last?'・'+esc(mdw(last)).replace(/（.）/,'')+'まで':'')+'）</h2>'+(p.status==='paused'?'<p class="caption">いまは停止中です。再開すると、未記録の取り組むことが停止した日数だけ後ろにずれます。</p>':'')+(p.tasks.length?'':hint('取り組むことはまだありません。'));
