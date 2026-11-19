@@ -175,7 +175,7 @@ function replan(p,records,today,id){
 }
 
 // ---------- 進み具合（達成率・遅れ・連続記録）----------
-// 達成率は、取り組むことの数ではなく、時間（量）で数える：できた＝全部、途中まで＝位置から割合、やらなかった・記録なし＝0。今日までの取り組むことが分母
+// 達成率は、取り組むことの数ではなく、時間（量）で数える：できた＝全部、一部＝位置から割合、やらなかった・記録なし＝0。今日までの取り組むことが分母
 function fraction(t,rec){
  if(!rec||rec.mode==='none')return 0;if(rec.mode==='done')return 1;
  if(t.from==null&&t.unit==='分')return rec.position!=null&&t.minutes>0?Math.max(0,Math.min(1,rec.position/t.minutes)):0;   // 習慣：分数の割合
@@ -299,7 +299,7 @@ function apply(doc,action,actor,ctx){
  case 'set_profile':d.profile=validateProfile(a.profile);msg='勉強に使える時間を変更';break;
  case 'activate':if(!p)fail('計画が見つかりません');shiftPaused(p,d,today);p.status='active';p.resumeAfter=null;d.activeId=p.id;msg='計画「'+p.title+'」を再開';break;
  case 'report':var t=task();if(actor.role==='teacher')fail('記録は生徒の画面から行ってください');if(t.date>today)fail('未来の日の実績は記録できません');if(['done','partial','extra','none'].indexOf(a.mode)<0)fail('記録の種類を確認してください');
-  // 途中まで：予定の範囲の中の位置（最後まで入れたら、全部できた）。予定より多く：予定の最後より先の位置（先にやった分を、あとの取り組むことから消す）
+  // 途中まで：予定の範囲の中の位置（最後まで入れたら、できた）。予定より多く：予定の最後より先の位置（先にやった分を、あとの取り組むことから消す）
   var hab=(t.from==null&&t.unit==='分');   // 習慣作りの取り組むこと：番号ではなく、分数で記録する
   var matEnd=t.to==null?null:Math.max(t.to,((p.input.materials||[]).find(function(m){return m.name===t.name})||{to:t.to}).to);
   if(a.mode==='extra'&&!hab&&(t.to==null||matEnd<=t.to))fail('この取り組むことには、予定より多くは記録できません');
