@@ -126,12 +126,12 @@ function fillPar(days,tasks){
  lanes.forEach(function(l){for(var i=l.si;i<l.segs.length;i++){var t2=l.segs[i],u0=i===l.si?l.used:0,rest=t2.units-u0;if(rest<=0)continue;var a2=t2.numeric?t2.start+u0*t2.size:null,b2=t2.numeric?t2.end:null;leftovers.push({text:t2.label(a2,b2),min:rest*t2.unitMin})}});
  return leftovers;
 }
-var OTHER=null;   // 日付 → ほかの進行中の計画が、その日に使っている分数（勉強できる時間は、全部の計画で共有。計画ごとには、増えない）
-function bdays(start,end,row){var b=E._internal.buildDays(start,end,row);if(OTHER)b.days.forEach(function(dy){var o=OTHER(dy.date);if(o>0&&dy.kind==='study'){dy.cap=Math.max(0,dy.cap-o);dy.noForce=true}});return b}
+var OTHER=null,OTHERH=null;   // 日付 → ほかの進行中の計画が、その日に使っている分数（勉強できる時間は、全部の計画で共有。計画ごとには、増えない）
+function bdays(start,end,row,habit){var b=E._internal.buildDays(start,end,row),oth=habit?OTHERH:OTHER;if(oth)b.days.forEach(function(dy){var o=oth(dy.date);if(o>0&&dy.kind==='study'){dy.cap=Math.max(0,dy.cap-o);dy.noForce=true}});return b}
 function build(input,today,id){
  var a=normalize(input,today),row=rowOf(a);
  // The engine accepts enumerated measured minutes; preserve arbitrary numeric inputs by using its read-material objects below.
- var built=bdays(a.start,a.end,row),mats=materialsOf(a,row);
+ var built=bdays(a.start,a.end,row,a.type==='habit'),mats=materialsOf(a,row);
  var remaining=[];
  if(a.type==='habit'){
   built.days.forEach(function(d){var m=a.habit.menu[d.dow];if(!m||m==='休み'||d.kind!=='study')return;var minutes=Math.min(a.habit.goalMin,d.cap);if(minutes<=0)return;   /* 1日の時間（宿題・勉強しない日・予備日・ほかの計画の分を引いたもの）と、目標の小さいほう */
@@ -292,14 +292,17 @@ function relayFuture(p,d,today,ctx,tag){
 }
 function apply(doc,action,actor,ctx){
  var d=copy(doc),a=action||{},p=d.plans.find(function(p){return p.id===a.planId}),msg='',now=ctx.now,today=ctx.today;
- OTHER=function(date){var m=0;d.plans.forEach(function(q){if(q.status==='active'&&(!p||q.id!==p.id))q.tasks.forEach(function(t){if(t.date===date)m+=(t.minutes||0)})});return m};
+ function mkOther(excl,habitOnly){return function(date){var m=0;d.plans.forEach(function(q){if(q.status==='active'&&q.id!==excl&&(!habitOnly||q.type==='habit'))q.tasks.forEach(function(t){if(t.date===date)m+=(t.minutes||0)})});return m}}
+ OTHER=mkOther(p?p.id:null,false);OTHERH=mkOther(p?p.id:null,true);
+ // 習慣の時間を先に確保する：習慣を足した・直した・再開したとき、ほかの進行中の計画の、記録のない取り組むことを、残りの時間に並べ直す
+ function relayOthers(exceptId){d.plans.forEach(function(q){if(q.id===exceptId||q.status!=='active'||q.type==='habit'||q.juken)return;OTHER=mkOther(q.id,false);try{if(q.type==='task'){var rr=replan(q,d.records,today,ctx.id);q.tasks=rr.tasks;q.leftovers=rr.leftovers}else relayFuture(q,d,today,ctx,'h'+q.id.slice(0,4))}catch(e){/* 並べ直せる日が残っていない計画は、そのまま */}});OTHER=mkOther(p?p.id:null,false)}
  function task(){if(!p)fail('計画が見つかりません');var t=p.tasks.find(function(t){return t.id===a.taskId});if(!t)fail('取り組むことが見つかりません');return t}
  switch(a.type){
  case 'create':
-  p=build(withProfile(d,a.input),today,ctx.id);if(d.plans.length>=8)fail('テスト環境では計画は8個までです');d.plans.push(p);d.activeId=p.id;msg='計画「'+p.title+'」を作成';break;
+  p=build(withProfile(d,a.input),today,ctx.id);if(d.plans.length>=8)fail('テスト環境では計画は8個までです');d.plans.push(p);d.activeId=p.id;if(p.type==='habit')relayOthers(p.id);msg='計画「'+p.title+'」を作成';break;
  case 'pause_plan':if(!p)fail('計画が見つかりません');if(p.status!=='active')fail('進行中の計画だけ、一時停止できます');p.status='paused';p.pausedAt=today;p.resumeAfter=null;if(d.activeId===p.id){var nx0=activePlans(d)[0];d.activeId=nx0?nx0.id:p.id}msg='計画「'+p.title+'」を一時停止';break;
  case 'set_profile':d.profile=validateProfile(a.profile);msg='勉強に使える時間を変更';break;
- case 'activate':if(!p)fail('計画が見つかりません');shiftPaused(p,d,today);p.status='active';p.resumeAfter=null;d.activeId=p.id;msg='計画「'+p.title+'」を再開';break;
+ case 'activate':if(!p)fail('計画が見つかりません');shiftPaused(p,d,today);p.status='active';p.resumeAfter=null;d.activeId=p.id;if(p.type==='habit')relayOthers(p.id);msg='計画「'+p.title+'」を再開';break;
  case 'report':var t=task();if(actor.role==='teacher')fail('記録は生徒の画面から行ってください');if(t.date>today)fail('未来の日の実績は記録できません');if(['done','partial','extra','none'].indexOf(a.mode)<0)fail('記録の種類を確認してください');
   // 途中まで：予定の範囲の中の位置（最後まで入れたら、全部できた）。予定より多く：予定の最後より先の位置（先にやった分を、あとの取り組むことから消す）
   var hab=(t.from==null&&t.unit==='分');   // 習慣作りの取り組むこと：番号ではなく、分数で記録する
@@ -354,7 +357,7 @@ var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
    msg='条件を変更して取り組むことを再作成（受験逆算）';break}
   if(retained.length){if(p.juken)fail('受験逆算の計画は、「遅れを組み直す」を使ってください');if(p.type!=='habit'){input.materials=remainingMaterials(p,d.records,p.type==='task');if(!input.materials.length)fail('すべての範囲が終わっています');if(p.type==='task')input.homeworks=(p.input.homeworks||[]).map(function(h){var rm=input.materials.find(function(m){return m.name===h.name});return rm?Object.assign({},h,{from:rm.from,amount:rm.to-rm.from+1}):null}).filter(Boolean)}}
   var n=build(input,today,ctx.id);retained.forEach(function(t){if(!d.records[t.id]&&t.date<today)t.rescheduled=today});
-  p.input=n.input;p.tasks=retained.concat(n.tasks);p.goal=n.goal;p.title=n.title;p.target=n.target;p.leftovers=n.leftovers;msg='条件を変更して取り組むことを再作成';break;
+  p.input=n.input;p.tasks=retained.concat(n.tasks);p.goal=n.goal;p.title=n.title;p.target=n.target;p.leftovers=n.leftovers;if(p.type==='habit')relayOthers(p.id);msg='条件を変更して取り組むことを再作成';break;
  case 'replan':if(!p||p.status!=='active')fail('進行中の計画だけ、組み直せます');if(p.type==='habit')fail('習慣作りの計画は、組み直しません');if(p.juken&&p.juken.autoTasks){syncUpper(p,d.records,today);regenTasks(p,d.records,today,'r'+today);msg='上段の教材の進みを反映して、日ごとの計画を組み直し';break}
   var rp=replan(p,d.records,today,ctx.id);p.tasks=rp.tasks;p.leftovers=rp.leftovers;p.replannedAt=today;msg='遅れを組み直し（'+rp.startDay+'から'+rp.moved+'件）';break;
  case 'juken_adjust':
