@@ -178,6 +178,7 @@ function replan(p,records,today,id){
 // 達成率は、取り組むことの数ではなく、時間（量）で数える：できた＝全部、途中まで＝位置から割合、やらなかった・記録なし＝0。今日までの取り組むことが分母
 function fraction(t,rec){
  if(!rec||rec.mode==='none')return 0;if(rec.mode==='done')return 1;
+ if(t.from==null&&t.unit==='分')return rec.position!=null&&t.minutes>0?Math.max(0,Math.min(1,rec.position/t.minutes)):0;   // 習慣：分数の割合
  if(t.from==null||t.to==null||rec.position==null||t.to<t.from)return 0;
  return Math.max(0,Math.min(1,(rec.position-t.from+1)/(t.to-t.from+1)));
 }
@@ -299,10 +300,12 @@ function apply(doc,action,actor,ctx){
  case 'activate':if(!p)fail('計画が見つかりません');shiftPaused(p,d,today);p.status='active';p.resumeAfter=null;d.activeId=p.id;msg='計画「'+p.title+'」を再開';break;
  case 'report':var t=task();if(actor.role==='teacher')fail('記録は生徒の画面から行ってください');if(t.date>today)fail('未来の日の実績は記録できません');if(['done','partial','extra','none'].indexOf(a.mode)<0)fail('記録の種類を確認してください');
   // 途中まで：予定の範囲の中の位置（最後まで入れたら、全部できた）。予定より多く：予定の最後より先の位置（先にやった分を、あとの取り組むことから消す）
+  var hab=(t.from==null&&t.unit==='分');   // 習慣作りの取り組むこと：番号ではなく、分数で記録する
   var matEnd=t.to==null?null:Math.max(t.to,((p.input.materials||[]).find(function(m){return m.name===t.name})||{to:t.to}).to);
-  if(a.mode==='extra'&&(t.to==null||matEnd<=t.to))fail('この取り組むことには、予定より多くは記録できません');
-  var end=a.mode==='partial'?(a.position==null&&t.from==null?null:number(a.position,t.from==null?0:t.from,t.to==null?180:t.to)):a.mode==='extra'?number(a.position,t.to+1,matEnd):null;var rmode=a.mode;
-  if(rmode==='partial'&&t.to!=null&&end!=null&&end>=t.to){rmode='done';end=null}
+  if(a.mode==='extra'&&!hab&&(t.to==null||matEnd<=t.to))fail('この取り組むことには、予定より多くは記録できません');
+  var end=a.mode==='partial'&&hab?number(a.position,1,t.minutes):a.mode==='extra'&&hab?number(a.position,t.minutes+1,360):a.mode==='partial'?(a.position==null&&t.from==null?null:number(a.position,t.from==null?0:t.from,t.to==null?180:t.to)):a.mode==='extra'?number(a.position,t.to+1,matEnd):null;var rmode=a.mode;
+  if(rmode==='partial'&&(hab?end>=t.minutes:t.to!=null&&end!=null&&end>=t.to)){rmode='done';end=null}
+  if(rmode==='extra'&&hab)rmode='done';
   if(rmode==='extra'){rmode='done';var xe=end,xs=t.to+1;p.tasks=p.tasks.filter(function(x){return !(x.id!==t.id&&x.name===t.name&&editable(x)&&!d.records[x.id]&&x.from>=xs&&x.to<=xe)});p.tasks.forEach(function(x){if(x.id!==t.id&&x.name===t.name&&editable(x)&&!d.records[x.id]&&x.from<=xe&&x.to>xe){x.from=xe+1;x.text=labelOf(x,x.from,x.to);x.minutes=taskMin(p,x,x.from,x.to)}})}
  var prevRec=d.records[t.id];d.records[t.id]={mode:rmode,position:end,date:t.date,updatedAt:now};
  if(prevRec&&prevRec.mode==='done'&&prevRec.position!=null&&t.to!=null&&prevRec.position>t.to&&!(end!=null&&end>=prevRec.position)&&p.type!=='habit'&&p.type!=='task'&&!p.juken)relayFuture(p,d,today,ctx,'x');/* 先にやった分を取り消したら、あとの取り組むことに戻す */msg=t.name+'の進み具合を記録';if(a.carry&&t.from==null&&a.mode!=='done'){var nd=add(today,1);if(nd>p.goal)fail('計画の終了日を過ぎるため、明日には回せません');p.tasks.push({id:ctx.id+'-c',date:nd,name:t.name,subject:t.subject,text:t.text+'（続き）',minutes:t.minutes,from:null,to:null,unit:''})}break;
