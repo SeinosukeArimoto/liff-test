@@ -212,6 +212,8 @@ function recLabel(t,rec,today){
  if(t.rescheduled)return '組み直し済み';return t.date<today?'未記録':'';
 }
 function pctText(v){return v==null?'—':v+'%'}
+// その日の勉強時間：取り組むことの記録から、自動で合計する（できた＝予定の分数、一部＝予定の分数×進んだ割合、習慣で多くやった＝入れた分数、やらなかった＝0）。記録がなければ null。以前に手で入れた時間があれば、それを使う
+function studyMinutes(doc,date){var m=doc.records['time:'+date];if(m)return m.minutes;var tot=0,any=false;doc.plans.forEach(function(q){q.tasks.forEach(function(t){if(t.date!==date)return;var r=doc.records[t.id];if(!r)return;any=true;if(r.mode==='none')return;if(r.mode==='done')tot+=(t.unit==='分'&&r.position!=null&&r.position>t.minutes)?r.position:t.minutes;else tot+=Math.round(t.minutes*fraction(t,r))})});return any?tot:null}
 function printHtml(doc,plan,name,today){
  var rec=doc.records||{},g=progressOf(doc,plan,today)||{achievement:{}},end=plan.end||plan.goal,a=g.achievement||{};
  var h='<html><head><meta charset="utf-8"><style>@page{size:A4;margin:12mm}body{font-family:sans-serif;font-size:10pt;color:#222}h1{font-size:18pt;margin:0 0 4px}h2{font-size:12pt;margin:16px 0 6px;border-bottom:2px solid #f28c28;padding-bottom:2px}h3{font-size:10.5pt;margin:12px 0 4px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ccc;padding:5px 7px;text-align:left;vertical-align:top}th{background:#fdeedd}tr{page-break-inside:avoid}.sub{color:#666;margin:2px 0}.warn{color:#b26a00}.lt{color:#888}</style></head><body>';
@@ -227,7 +229,7 @@ function printHtml(doc,plan,name,today){
  if(!tasks.length)h+='<p class="sub">取り組むことはありません。</p>';
  order.forEach(function(k){
   var ts=weeks[k],mins=ts.reduce(function(s2,t){return s2+t.minutes},0),pc=k<=today?pctOf(plan,rec,k,add(k,6),today):null,times=[];
-  for(var i=0;i<7;i++){var r=rec['time:'+add(k,i)];if(r)times.push(md(add(k,i))+' '+r.minutes+'分')}
+  for(var i=0;i<7;i++){var sm=studyMinutes(doc,add(k,i));if(sm!=null)times.push(md(add(k,i))+' '+sm+'分')}
   h+='<h3>'+md(k)+'〜'+md(add(k,6))+(k===week(today)?'（今週）':'')+'　計画 約'+mins+'分'+(pc==null?'':'　達成 '+pc+'%')+'</h3><table><tr><th style="width:15%">日付</th><th>取り組むこと</th><th style="width:11%">目安</th><th style="width:19%">結果</th></tr>';
   ts.forEach(function(t){var l=recLabel(t,rec[t.id],today);h+='<tr><td>'+md(t.date)+'（'+dowOf(t.date)+'）</td><td>'+esc(t.text)+'</td><td>'+t.minutes+'分</td><td'+(l==='未記録'?' class="warn"':l==='組み直し済み'?' class="lt"':'')+'>'+esc(l)+'</td></tr>'});
   h+='</table>'+(times.length?'<p class="sub">勉強時間の記録：'+esc(times.join('、'))+'</p>':'');
@@ -431,5 +433,5 @@ function shiftPaused(p,d,today){if(!p.pausedAt)return;var delta=Math.max(0,days(
 function futureWeeks(p,today){if(!p||!p.juken||!p.juken.autoTasks||!p.tasksUntil)return [];var end=p.end||p.goal;if(p.tasksUntil>=end)return [];var ts=tasksFromRoute(p.input,'fw',p.juken.materials,today<p.start?p.start:today,'fw',end),map={};ts.forEach(function(t){if(t.date<=p.tasksUntil)return;var wk=week(t.date),o=map[wk]=map[wk]||{week:wk,total:0,subjects:{}};o.total+=t.minutes;o.subjects[t.jsubj]=(o.subjects[t.jsubj]||0)+t.minutes});return Object.keys(map).sort().map(function(k){return map[k]})}
 function extendWindow(p,records,today){(p.juken.materials||[]).forEach(function(sp){if(sp.missing)return;sp.items.forEach(function(it){if(it.tracked&&it.total)it.doneUnits=itemActual(p,records,it,sp.subject)})});regenTasks(p,records,today,'w'+today,true)}
 function resume(doc,today){var d=copy(doc),p=active(d);activePlans(d).forEach(function(q){if(q.juken&&q.juken.autoTasks&&q.tasksUntil&&q.tasksUntil<(q.end||q.goal)&&q.tasksUntil<add(today,7)&&today>=q.start)extendWindow(q,d.records,today)});if(!p||p.goal>=today)return d;var q=d.plans.find(function(q){return q.status==='paused'&&q.resumeAfter&&q.resumeAfter<=today});if(q){p.status='finished';shiftPaused(q,d,today);q.status='active';q.resumeAfter=null;d.activeId=q.id;d.history.unshift({id:'resume-'+today,at:today,by:'システム',text:'計画「'+q.title+'」を自動再開'})}return d}
-var api={fraction:fraction,activePlans:activePlans,defaultProfile:defaultProfile,futureWeeks:futureWeeks,estimate:taskMin,stateOf:stateOf,studentSummary:studentSummary,reviewDue:reviewDue,TYPES:TYPES,empty:empty,build:build,apply:apply,resume:resume,progress:progress,progressOf:progressOf,printHtml:printHtml,active:active,add:add,week:week,validateSettings:validateSettings,copy:copy};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudyCore=api;
+var api={studyMinutes:studyMinutes,fraction:fraction,activePlans:activePlans,defaultProfile:defaultProfile,futureWeeks:futureWeeks,estimate:taskMin,stateOf:stateOf,studentSummary:studentSummary,reviewDue:reviewDue,TYPES:TYPES,empty:empty,build:build,apply:apply,resume:resume,progress:progress,progressOf:progressOf,printHtml:printHtml,active:active,add:add,week:week,validateSettings:validateSettings,copy:copy};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.StudyCore=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
