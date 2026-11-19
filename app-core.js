@@ -25,7 +25,7 @@ function normalize(input,today){
  if(a.type==='task'){
   a.homeworks=(Array.isArray(a.homeworks)?a.homeworks:[]).map(function(h,i){h=h||{};var nm=text(h.name);if(!nm)fail('課題の名前を入力してください');var u=['ページ','枚','問題の番号'].indexOf(h.unit)>=0?h.unit:fail('数え方を選んでください');var um=(h.unitMin===''||h.unitMin==null)?null:number(h.unitMin,1,60);var fr=h.from==null?1:number(h.from,1,100000),am=number(h.amount,1,100000),due=date(h.due);if(due<a.start)fail('提出日は、開始日以降にしてください');return {name:nm,subject:text(h.subject||'学習',30),unit:u,amount:am,from:fr,due:due,unitMin:um,_i:i}});
   if(!a.homeworks.length||a.homeworks.length>10)fail('課題は1〜10件で入力してください');
-  a.homeworks.sort(function(x,y){return x.due<y.due?-1:x.due>y.due?1:x._i-y._i});a.homeworks.forEach(function(h){delete h._i});
+  a.homeworks.sort(function(x,y){return x.due<y.due?-1:x.due>y.due?1:x._i-y._i});a.homeworks.forEach(function(h){delete h._i});a.goal=a.homeworks[a.homeworks.length-1].due;if(days(a.start,a.goal)>180)fail('提出日は、開始日から180日以内にしてください');
   a.materials=a.homeworks.map(function(h){return {name:h.name,subject:h.subject,from:h.from,to:h.from+h.amount-1,unit:h.unit,minutes:h.unitMin==null?(/数学/.test(h.subject)?15:10):h.unitMin,provisional:h.unitMin==null}});a.hwWeekly='ほとんどない'}
  if(a.type==='habit'){
   var hb=a.habit||{},menu=(Array.isArray(hb.menu)?hb.menu:[]).map(function(x){return x==='やらない日'?'休み':x}),OPT=['英語','数学','国語','理科・社会','学校の宿題','休み'];
@@ -126,6 +126,29 @@ function fillPar(days,tasks){
  lanes.forEach(function(l){for(var i=l.si;i<l.segs.length;i++){var t2=l.segs[i],u0=i===l.si?l.used:0,rest=t2.units-u0;if(rest<=0)continue;var a2=t2.numeric?t2.start+u0*t2.size:null,b2=t2.numeric?t2.end:null;leftovers.push({text:t2.label(a2,b2),min:rest*t2.unitMin})}});
  return leftovers;
 }
+// 課題の計画：課題ごとに、提出日の前日までの勉強できる日数で、均等に割る。提出日が近い課題から先に置く。足りない分は後ろに回り、置ききれなければ「入りきらない範囲」に出る
+function fillDue(days,tasks,dueOf){
+ var lanes=[],by={};
+ tasks.forEach(function(t){var l=by[t.name];if(!l){l=by[t.name]={segs:[],si:0,used:0,due:dueOf(t.name)||'9999-12-31'};lanes.push(l)}l.segs.push(t)});
+ lanes.sort(function(x,y){return x.due<y.due?-1:x.due>y.due?1:0});
+ function cur(l){return l.si<l.segs.length?l.segs[l.si]:null}
+ function remU(l){var r=0;for(var i=l.si;i<l.segs.length;i++)r+=i===l.si?l.segs[i].units-l.used:l.segs[i].units;return r}
+ days.forEach(function(day){
+  if(day.kind!=='study'||day.cap<=0)return;
+  var left=day.cap,placed=0;
+  function put(l,n){var t=cur(l),a=t.numeric?t.start+l.used*t.size:null,b=t.numeric?Math.min(t.end,t.start+(l.used+n)*t.size-1):null,minutes=n*t.unitMin;day.items.push({text:t.label(a,b),min:minutes,subject:t.subject,provisional:t.provisional,name:t.name,from:a,to:b,unit:t.unit});day.minutes+=minutes;left-=minutes;placed+=n;l.used+=n;if(l.used>=t.units){l.si++;l.used=0}}
+  lanes.forEach(function(l){
+   var t=cur(l);if(!t)return;
+   var last=l.due>day.date?add(l.due,-1):day.date,dl=0;days.forEach(function(d){if(d.kind==='study'&&d.cap>0&&d.date>=day.date&&d.date<=last)dl++});if(dl<1)dl=1;
+   var n=Math.min(Math.ceil(remU(l)/dl),t.units-l.used,Math.floor(left/t.unitMin));
+   if(n>0)put(l,n)});
+  if(!placed&&!day.noForce){for(var i=0;i<lanes.length;i++){if(cur(lanes[i])){put(lanes[i],1);break}}}
+ });
+ var leftovers=[];
+ lanes.forEach(function(l){for(var i=l.si;i<l.segs.length;i++){var t2=l.segs[i],u0=i===l.si?l.used:0,rest=t2.units-u0;if(rest<=0)continue;var a2=t2.numeric?t2.start+u0*t2.size:null,b2=t2.numeric?t2.end:null;leftovers.push({text:t2.label(a2,b2),min:rest*t2.unitMin})}});
+ return leftovers;
+}
+function dueMap(a){var m={};(a.homeworks||[]).forEach(function(h){if(m[h.name]==null)m[h.name]=h.due});return function(n){return m[n]}}
 var OTHER=null,OTHERH=null;   // 日付 → ほかの進行中の計画が、その日に使っている分数（勉強できる時間は、全部の計画で共有。計画ごとには、増えない）
 function bdays(start,end,row,habit){var b=E._internal.buildDays(start,end,row),oth=habit?OTHERH:OTHER;if(oth)b.days.forEach(function(dy){var o=oth(dy.date);if(o>0&&dy.kind==='study'){dy.cap=Math.max(0,dy.cap-o);dy.noForce=true}});return b}
 function build(input,today,id){
@@ -136,7 +159,7 @@ function build(input,today,id){
  if(a.type==='habit'){
   built.days.forEach(function(d){var m=a.habit.menu[d.dow];if(!m||m==='休み'||d.kind!=='study')return;var minutes=Math.min(a.habit.goalMin,d.cap);if(minutes<=0)return;   /* 1日の時間（宿題・勉強しない日・予備日・ほかの計画の分を引いたもの）と、目標の小さいほう */
   d.items.push({text:m+' ・ '+minutes+'分',name:m,subject:m,min:minutes,from:null,to:null,unit:'分'})});
- }else{remaining=a.type==='task'?E._internal.fill(built.days,mats):fillPar(built.days,mats)}
+ }else{remaining=a.type==='task'?fillDue(built.days,mats,dueMap(a)):fillPar(built.days,mats)}
  var tasks=[];built.days.forEach(function(d){d.items.forEach(function(t){tasks.push({id:id+'-'+tasks.length,date:d.date,name:t.name,subject:t.subject,text:t.text,from:t.from,to:t.to,unit:t.unit,minutes:t.min})})});
  var jk=null,rm,wm=a.juken&&a.juken.autoTasks?Math.max(30,Math.round(a.availability.reduce(function(x,y){return x+y},0)/Math.max(1,a.juken.subjects.length))):undefined;
  if(a.juken){var jp=JC.plan({weeklyMinutes:wm,band:a.juken.band,others:a.juken.others,univ:{dev:a.juken.dev},mock:a.juken.mockType&&a.juken.mockScore!=null?{type:a.juken.mockType,score:a.juken.mockScore}:null,start:a.start,examYm:a.juken.examYm,route:a.juken.route||undefined,subjects:a.juken.subjects,owned:a.juken.owned});rm=jp.roadmap;if(a.juken.autoTasks){jp.materials.forEach(function(sp){(sp.items||[]).forEach(function(i){i.tracked=true})});tasks=tasksFromRoute(a,id,jp.materials,a.start,'u')}
@@ -169,7 +192,7 @@ function replan(p,records,today,id){
   left.forEach(function(r){queue.push(Object.assign({},m,{start:r[0],end:r[1],units:Math.ceil((r[1]-r[0]+1)/m.size)}))});
  });
  p.tasks.forEach(function(t){if(t.date<startDay&&!rec(t)&&names[t.name])t.rescheduled=today});   // 過去の未記録は「組み直し済み」の印（遅れとして数え続けない）
- var built=bdays(startDay,end,row),leftovers=(a.type==='task'?E._internal.fill:fillPar)(built.days,queue),made=[];
+ var built=bdays(startDay,end,row),leftovers=(a.type==='task'?function(dd,q){return fillDue(dd,q,dueMap(a))}:fillPar)(built.days,queue),made=[];
  built.days.forEach(function(d){d.items.forEach(function(t){made.push({id:p.id+'-r'+today+'-'+made.length,date:d.date,name:t.name,subject:t.subject,text:t.text,from:t.from,to:t.to,unit:t.unit,minutes:t.min})})});
  return {tasks:kept.concat(made).sort(function(x,y){return x.date<y.date?-1:x.date>y.date?1:0}),leftovers:leftovers,moved:made.length,startDay:startDay};
 }
