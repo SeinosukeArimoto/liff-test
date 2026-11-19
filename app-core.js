@@ -134,7 +134,8 @@ function build(input,today,id){
  var built=bdays(a.start,a.end,row),mats=materialsOf(a,row);
  var remaining=[];
  if(a.type==='habit'){
-  built.days.forEach(function(d){var m=a.habit.menu[d.dow];if(!m||m==='休み')return;var av=a.availability[d.dow],minutes=Math.min(a.habit.goalMin,av||a.habit.goalMin);d.items.push({text:m+' ・ '+minutes+'分',name:m,subject:m,min:minutes,from:null,to:null,unit:'分'})});
+  built.days.forEach(function(d){var m=a.habit.menu[d.dow];if(!m||m==='休み'||d.kind!=='study')return;var minutes=Math.min(a.habit.goalMin,d.cap);if(minutes<=0)return;   /* 1日の時間（宿題・勉強しない日・予備日・ほかの計画の分を引いたもの）と、目標の小さいほう */
+  d.items.push({text:m+' ・ '+minutes+'分',name:m,subject:m,min:minutes,from:null,to:null,unit:'分'})});
  }else{remaining=a.type==='task'?E._internal.fill(built.days,mats):fillPar(built.days,mats)}
  var tasks=[];built.days.forEach(function(d){d.items.forEach(function(t){tasks.push({id:id+'-'+tasks.length,date:d.date,name:t.name,subject:t.subject,text:t.text,from:t.from,to:t.to,unit:t.unit,minutes:t.min})})});
  var jk=null,rm,wm=a.juken&&a.juken.autoTasks?Math.max(30,Math.round(a.availability.reduce(function(x,y){return x+y},0)/Math.max(1,a.juken.subjects.length))):undefined;
