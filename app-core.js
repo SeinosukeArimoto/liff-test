@@ -30,7 +30,7 @@ function normalize(input,today){
  if(a.type==='habit'){
   var hb=a.habit||{},menu=(Array.isArray(hb.menu)?hb.menu:[]).map(function(x){return x==='やらない日'?'休み':x}),OPT=['英語','数学','国語','理科・社会','学校の宿題','休み'];
   if(menu.length!==7||menu.some(function(x){return OPT.indexOf(x)<0}))fail('曜日ごとのメニューを選んでください');
-  var gmn=number(hb.goalMin,15,90);if([15,30,45,60,90].indexOf(gmn)<0)fail('1日の時間を選び直してください');
+  var gmn=number(hb.goalMin,5,360);
   var gd=menu.filter(function(x){return x!=='休み'}).length;if(gd<1)fail('取り組む日を、1日以上入れてください');   // 週に何日かは、曜日ごとのメニュー（休み以外）の数
   a.habit={goalDays:gd,goalMin:gmn,lastWeekDays:['0日','1〜2日','3〜4日','5日以上'].indexOf(hb.lastWeekDays)>=0?hb.lastWeekDays:'',menu:menu.slice(),cMaterials:text(hb.cMaterials||'',200)};a.materials=[]}
  a.materials=(a.materials||[]).map(function(m){var name=text(m.name);if(!name)fail('教材・課題の名前を入力してください');return {name:name,subject:text(m.subject||'学習',30),from:number(m.from,1,100000),to:number(m.to,1,100000),unit:['ページ','問題の番号','単語の番号','枚'].indexOf(m.unit)>=0?m.unit:'ページ',minutes:number(m.minutes,1,60),provisional:!!m.provisional};});
