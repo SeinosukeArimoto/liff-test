@@ -320,19 +320,63 @@ function relayFuture(p,d,today,ctx,tag){
  p.leftovers=(p.leftovers||[]).filter(function(l){return !mats.some(function(m){return String(l.text).indexOf(m.name)===0})});
  if(segs.length)p.leftovers=p.leftovers.concat(layMaterials(p,today,ctx,segs,tag))
 }
+// 習慣の、今日以降の記録のない取り組むことを、今の勉強できる時間で、作り直す（ほかの習慣の分だけ引く。ほかの計画の分は引かない）
+function relayHabit(q,d,today,ctx,tag){
+ var inp2=withProfile(d,copy(q.input));inp2.start=today<q.start?q.start:today;inp2.goal=q.goal;var a2=normalize(inp2,today);a2.end=q.end||q.goal;var row2=rowOf(a2);
+ q.tasks=q.tasks.filter(function(t){return t.date<today||d.records[t.id]});
+ var bt=bdays(a2.start,a2.end,row2,true),n=0;
+ bt.days.forEach(function(dy){var m=q.input.habit.menu[dy.dow];if(!m||m==='休み'||dy.kind!=='study')return;var minutes=Math.min(q.input.habit.goalMin,dy.cap);if(minutes<=0)return;if(q.tasks.some(function(t){return t.date===dy.date}))return;q.tasks.push({id:ctx.id+'-'+tag+'-'+(n++),date:dy.date,name:m,subject:m,text:m+' ・ '+minutes+'分',from:null,to:null,unit:'分',minutes:minutes})});
+ q.tasks.sort(function(x,y){return x.date<y.date?-1:x.date>y.date?1:0})
+}
 function apply(doc,action,actor,ctx){
  var d=copy(doc),a=action||{},p=d.plans.find(function(p){return p.id===a.planId}),msg='',now=ctx.now,today=ctx.today;
  function mkOther(excl,habitOnly){return function(date){var m=0;d.plans.forEach(function(q){if(q.status==='active'&&q.id!==excl&&(!habitOnly||q.type==='habit'))q.tasks.forEach(function(t){if(t.date===date)m+=(t.minutes||0)})});return m}}
  OTHER=mkOther(p?p.id:null,false);OTHERH=mkOther(p?p.id:null,true);
- // 習慣の時間を先に確保する：習慣を足した・直した・再開したとき、ほかの進行中の計画の、記録のない取り組むことを、残りの時間に並べ直す
- function relayOthers(exceptId){d.plans.forEach(function(q){if(q.id===exceptId||q.status!=='active'||q.type==='habit'||q.juken)return;OTHER=mkOther(q.id,false);try{if(q.type==='task'){var rr=replan(q,d.records,today,ctx.id);q.tasks=rr.tasks;q.leftovers=rr.leftovers}else relayFuture(q,d,today,ctx,'h'+q.id.slice(0,4))}catch(e){/* 並べ直せる日が残っていない計画は、そのまま */}});OTHER=mkOther(p?p.id:null,false)}
+ // 計画を足した・再開した・勉強できる時間を変えたとき：進行中のすべての計画の、今日以降の記録のない取り組むことを、今の時間で計算し直す
+ // 順番：習慣が先（作った順）、そのあと、ほかの計画（作った順）。先の計画が時間を取り、後の計画は残りに入る。やった分と、過去の未記録は、そのまま
+ function mkOtherOrd(q,habitOnly,doneIds){return function(date){var m=0;d.plans.forEach(function(r){if(r.status!=='active'||r.id===q.id||(habitOnly&&r.type!=='habit'))return;r.tasks.forEach(function(t){if(t.date===date&&(t.date<today||d.records[t.id]||doneIds[r.id]))m+=(t.minutes||0)})});return m}}
+ function relayAll(){
+  var act=d.plans.filter(function(q){return q.status==='active'}),done={};
+  act.forEach(function(q){var w=withProfile(d,q.input);['availability','reserveDay','busyDates','hwWeekly','busyNote'].forEach(function(k){if(w[k]!==undefined)q.input[k]=w[k]})});
+  act.filter(function(q){return q.type==='habit'}).concat(act.filter(function(q){return q.type!=='habit'})).forEach(function(q,k){
+   OTHER=mkOtherOrd(q,false,done);OTHERH=mkOtherOrd(q,true,done);
+   try{
+    if(q.type==='habit')relayHabit(q,d,today,ctx,'q'+k);
+    else if(q.juken){if(q.juken.autoTasks){syncUpper(q,d.records,today);refreshUpper(q,{changes:[],warnings:[]},'q'+k)}}
+    else if(q.type==='task'){var rr=replan(q,d.records,today,ctx.id);q.tasks=rr.tasks;q.leftovers=rr.leftovers}
+    else relayFuture(q,d,today,ctx,'q'+k)
+   }catch(e){/* 並べ直せる日が残っていない計画は、そのまま */}
+   done[q.id]=true});
+  OTHER=mkOther(p?p.id:null,false);OTHERH=mkOther(p?p.id:null,true)}
+ // 受験の計画の教材の期間を、今の時間・偏差値・終わった教材で、計算し直す（月1回の見直しと、勉強できる時間を変えたときに使う）。終わった教材・講師が直した教材・手で足した教材は、そのまま
+ function refreshUpper(p,rv,tag){var jr=p.juken,devNow=jr.gap?jr.gap.current:(jr.mock?JC.correct0(jr.mock.type,jr.mock.score):null);
+   var rdevs={};Object.keys(jr.subjectDevs||{}).forEach(function(sn){rdevs[sn]=JC.correct0(jr.mockType||'河合',jr.subjectDevs[sn])});
+   var fresh=JC.materialPlan({band:jr.band,subjects:jr.subjects,start:today,examYm:jr.examYm,route:jr.route,owned:jr.ownedInput,dev:devNow,devs:rdevs,target:jr.dev,finished:finMap(jr.finishedInput),doneMats:jr.doneInput,capacity:capacityOf(bdays(today<p.start?p.start:today,examEndOf(jr.examYm,today<p.start?p.start:today,p.end||p.goal),rowOf(p.input)))});jr.load=fresh.load;jr.recommend=fresh.recommend;
+  jr.materials=jr.materials.map(function(old){
+   var nw=fresh.filter(function(x){return x.subject===old.subject})[0];if(!nw||nw.missing||old.missing)return old;
+   var bySlot={};nw.items.forEach(function(i){bySlot[i.slot]=i});var out=[],seen={};
+   old.items.forEach(function(it){
+    if(it.slot==null||it.locked||it.finished||(!it.tracked&&it.to<today)){out.push(it);if(it.slot!=null)seen[it.slot]=1;return}
+    var n2=bySlot[it.slot];seen[it.slot]=1;if(!n2){rv.changes.push(old.subject+'：「'+it.name+'」は、見送りになりました');return}
+    if(it.tracked){n2.tracked=true;n2.doneUnits=it.doneUnits||0;if(n2.doneUnits>0)n2.weeks=Math.max(1,Math.ceil((n2.total-n2.doneUnits)/(n2.pace*(n2.speed||1))))}
+    if(n2.weeks!==it.weeks)rv.changes.push(old.subject+'：「'+it.name+'」の期間が、'+it.weeks+'週から'+n2.weeks+'週に変わりました');
+    if(n2.replaced&&!it.replaced)rv.changes.push(old.subject+'：「'+n2.name+'」を、手持ちの教材として使えるようになりました');
+    if(it.hold&&!n2.hold&&!n2.replaced)rv.changes.push(old.subject+'：保留の「'+it.hold.ownName+'」が、解除されました');
+    out.push(n2)});
+   nw.items.forEach(function(i){if(!seen[i.slot]){if(jr.autoTasks)i.tracked=true;out.push(i)}});
+   out.sort(function(x,y){return (x.slot==null?9999:x.slot)-(y.slot==null?9999:y.slot)||0});
+   var sp2={subject:old.subject,items:out,skipped:nw.skipped||old.skipped||[]};JC.relayoutFrom(sp2,today,jr.examYm);
+   if(!sp2.fits)rv.warnings.push(old.subject+'：入試までに終わりません（約'+sp2.shortDays+'日、足りません）。教材の見送りや、期間の見直しを検討してください');
+   return sp2});
+  if(jr.autoTasks)regenTasks(p,d.records,today,tag);
+  if(!p.roadmapEdited)p.roadmap=JC.withMaterials(JC.roadmap({band:jr.band,route:jr.route,start:jr.start,examYm:jr.examYm}),jr.materials)}
  function task(){if(!p)fail('計画が見つかりません');var t=p.tasks.find(function(t){return t.id===a.taskId});if(!t)fail('取り組むことが見つかりません');return t}
  switch(a.type){
  case 'create':
-  p=build(withProfile(d,a.input),today,ctx.id);if(d.plans.length>=8)fail('テスト環境では計画は8個までです');d.plans.push(p);d.activeId=p.id;if(p.type==='habit')relayOthers(p.id);msg='計画「'+p.title+'」を作成';break;
+  p=build(withProfile(d,a.input),today,ctx.id);if(d.plans.length>=8)fail('テスト環境では計画は8個までです');d.plans.push(p);d.activeId=p.id;if(p.type==='habit')relayAll();msg='計画「'+p.title+'」を作成';break;
  case 'pause_plan':if(!p)fail('計画が見つかりません');if(p.status!=='active')fail('進行中の計画だけ、一時停止できます');p.status='paused';p.pausedAt=today;p.resumeAfter=null;if(d.activeId===p.id){var nx0=activePlans(d)[0];d.activeId=nx0?nx0.id:p.id}msg='計画「'+p.title+'」を一時停止';break;
- case 'set_profile':d.profile=validateProfile(a.profile);msg='勉強に使える時間を変更';break;
- case 'activate':if(!p)fail('計画が見つかりません');shiftPaused(p,d,today);p.status='active';p.resumeAfter=null;d.activeId=p.id;if(p.type==='habit')relayOthers(p.id);msg='計画「'+p.title+'」を再開';break;
+ case 'set_profile':d.profile=validateProfile(a.profile);relayAll();msg='勉強に使える時間を変更';break;
+ case 'activate':if(!p)fail('計画が見つかりません');shiftPaused(p,d,today);p.status='active';p.resumeAfter=null;d.activeId=p.id;if(p.type==='habit')relayAll();msg='計画「'+p.title+'」を再開';break;
  case 'report':var t=task();if(actor.role==='teacher')fail('記録は生徒の画面から行ってください');if(t.date>today)fail('未来の日の実績は記録できません');if(['done','partial','extra','none'].indexOf(a.mode)<0)fail('記録の種類を確認してください');
   // 途中まで：予定の範囲の中の位置（最後まで入れたら、全部できた）。予定より多く：予定の最後より先の位置（先にやった分を、あとの取り組むことから消す）
   var hab=(t.from==null&&t.unit==='分');   // 習慣作りの取り組むこと：番号ではなく、分数で記録する
@@ -387,7 +431,7 @@ var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
    msg='条件を変更して取り組むことを再作成（受験逆算）';break}
   if(retained.length){if(p.juken)fail('受験逆算の計画は、「遅れを組み直す」を使ってください');if(p.type!=='habit'){input.materials=remainingMaterials(p,d.records,p.type==='task');if(!input.materials.length)fail('すべての範囲が終わっています');if(p.type==='task')input.homeworks=(p.input.homeworks||[]).map(function(h){var rm=input.materials.find(function(m){return m.name===h.name});return rm?Object.assign({},h,{from:rm.from,amount:rm.to-rm.from+1}):null}).filter(Boolean)}}
   var n=build(input,today,ctx.id);retained.forEach(function(t){if(!d.records[t.id]&&t.date<today)t.rescheduled=today});
-  p.input=n.input;p.tasks=retained.concat(n.tasks);p.goal=n.goal;p.title=n.title;p.target=n.target;p.leftovers=n.leftovers;if(p.type==='habit')relayOthers(p.id);msg='条件を変更して取り組むことを再作成';break;
+  p.input=n.input;p.tasks=retained.concat(n.tasks);p.goal=n.goal;p.title=n.title;p.target=n.target;p.leftovers=n.leftovers;if(p.type==='habit')relayAll();msg='条件を変更して取り組むことを再作成';break;
  case 'replan':if(!p||p.status!=='active')fail('進行中の計画だけ、組み直せます');if(p.type==='habit')fail('習慣作りの計画は、組み直しません');if(p.juken&&p.juken.autoTasks){syncUpper(p,d.records,today);regenTasks(p,d.records,today,'r'+today);msg='上段の教材の進みを反映して、日ごとの計画を組み直し';break}
   var rp=replan(p,d.records,today,ctx.id);p.tasks=rp.tasks;p.leftovers=rp.leftovers;p.replannedAt=today;msg='遅れを組み直し（'+rp.startDay+'から'+rp.moved+'件）';break;
  case 'juken_adjust':
@@ -426,25 +470,7 @@ var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
   if(a.mock&&a.mock.score!=null){jr.subjectDevs=jr.subjectDevs||{};jr.subjects.forEach(function(sn){jr.subjectDevs[sn]=Number(a.mock.score)});jr.mockType=a.mock.type}
    if(a.mockType&&['河合','東進','進研','駿台'].indexOf(a.mockType)>=0)jr.mockType=a.mockType;
    if(a.devs&&typeof a.devs==='object'){jr.subjectDevs=jr.subjectDevs||{};Object.keys(a.devs).forEach(function(sn){var v=a.devs[sn];if(jr.subjects.indexOf(sn)<0||v==null||v==='')return;v=Number(v);if(!(v>=20&&v<=85))fail('偏差値を確認してください：'+sn);if(jr.subjectDevs[sn]!==v)rv.changes.push(sn+'：偏差値が、'+(jr.subjectDevs[sn]==null?'未入力':jr.subjectDevs[sn])+'から'+v+'に変わりました');jr.subjectDevs[sn]=v;if(jr.mockType==null)jr.mockType='河合'})}
-   var rdevs={};Object.keys(jr.subjectDevs||{}).forEach(function(sn){rdevs[sn]=JC.correct0(jr.mockType||'河合',jr.subjectDevs[sn])});
-   var fresh=JC.materialPlan({band:jr.band,subjects:jr.subjects,start:today,examYm:jr.examYm,route:jr.route,owned:jr.ownedInput,dev:devNow,devs:rdevs,target:jr.dev,finished:finMap(jr.finishedInput),doneMats:jr.doneInput,capacity:capacityOf(bdays(today<p.start?p.start:today,examEndOf(jr.examYm,today<p.start?p.start:today,p.end||p.goal),rowOf(p.input)))});jr.load=fresh.load;jr.recommend=fresh.recommend;
-  jr.materials=jr.materials.map(function(old){
-   var nw=fresh.filter(function(x){return x.subject===old.subject})[0];if(!nw||nw.missing||old.missing)return old;
-   var bySlot={};nw.items.forEach(function(i){bySlot[i.slot]=i});var out=[],seen={};
-   old.items.forEach(function(it){
-    if(it.slot==null||it.locked||it.finished||(!it.tracked&&it.to<today)){out.push(it);if(it.slot!=null)seen[it.slot]=1;return}
-    var n2=bySlot[it.slot];seen[it.slot]=1;if(!n2){rv.changes.push(old.subject+'：「'+it.name+'」は、見送りになりました');return}
-    if(it.tracked){n2.tracked=true;n2.doneUnits=it.doneUnits||0;if(n2.doneUnits>0)n2.weeks=Math.max(1,Math.ceil((n2.total-n2.doneUnits)/(n2.pace*(n2.speed||1))))}
-    if(n2.weeks!==it.weeks)rv.changes.push(old.subject+'：「'+it.name+'」の期間が、'+it.weeks+'週から'+n2.weeks+'週に変わりました');
-    if(n2.replaced&&!it.replaced)rv.changes.push(old.subject+'：「'+n2.name+'」を、手持ちの教材として使えるようになりました');
-    if(it.hold&&!n2.hold&&!n2.replaced)rv.changes.push(old.subject+'：保留の「'+it.hold.ownName+'」が、解除されました');
-    out.push(n2)});
-   nw.items.forEach(function(i){if(!seen[i.slot]){if(jr.autoTasks)i.tracked=true;out.push(i)}});
-   out.sort(function(x,y){return (x.slot==null?9999:x.slot)-(y.slot==null?9999:y.slot)||0});
-   var sp2={subject:old.subject,items:out,skipped:nw.skipped||old.skipped||[]};JC.relayoutFrom(sp2,today,jr.examYm);
-   if(!sp2.fits)rv.warnings.push(old.subject+'：入試までに終わりません（約'+sp2.shortDays+'日、足りません）。教材の見送りや、期間の見直しを検討してください');
-   return sp2});
-  if(jr.autoTasks)regenTasks(p,d.records,today,'v'+today);
+   refreshUpper(p,rv,'v'+today);
   var pr=progressOf(d,p,today);if(pr&&(pr.missedCount>0||(pr.achievement.lastWeek!=null&&pr.achievement.lastWeek<60)))rv.warnings.push('日ごとの計画に、遅れがあります（先週の達成率 '+(pr.achievement.lastWeek==null?'—':pr.achievement.lastWeek+'%')+'、遅れ '+pr.missedCount+'個）。上段の到達点の見直しや、組み直しを検討してください');
   jr.owned=jr.owned;if(!p.roadmapEdited)p.roadmap=JC.withMaterials(JC.roadmap({band:jr.band,route:jr.route,start:jr.start,examYm:jr.examYm}),jr.materials);
   rv.at=today;rv.level=level;jr.reviews=[rv].concat(jr.reviews||[]).slice(0,12);jr.lastReview=today;
