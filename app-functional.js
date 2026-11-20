@@ -119,11 +119,11 @@ function jukenStep(w){
  const CK=[['ok','ほぼ解ける'],['half','半分くらい'],['weak','あまり解けない']];j.doneMats=j.doneMats||[];
  const ownRows=j.owned.map((o,i)=>'<div class="planrow"><span class="nm">'+esc(o.name)+'</span>'+btn('外す','removeOwn','secondary sm',{i})+'</div>').join('');
  const doneRows=j.doneMats.map((o,i)=>'<div class="doneitem"><div class="planrow"><span class="nm">'+esc(o.name)+'</span>'+btn('外す','removeDone','secondary sm',{i})+'</div><label class="field">どのくらい解ける？<select name="donest|'+i+'">'+CK.map(x=>'<option value="'+x[0]+'" '+((o.check||'ok')===x[0]?'selected':'')+'>'+x[1]+'</option>').join('')+'</select></label></div>').join('');
- return '<h3 class="sec-title">志望校</h3>'+univSel+deptSel+bandSel+devRow
- +'<label class="field">入試の年月<select name="examYm" required><option value="">選んでください</option>'+(()=>{const y0=Number(S.date.slice(0,4)),m0=Number(S.date.slice(5,7)),o=[];for(let k=0;k<40;k++){const m=(m0-1+k)%12+1,y=y0+Math.floor((m0-1+k)/12),v=y+'-'+String(m).padStart(2,'0');o.push('<option value="'+v+'" '+(j.examYm===v?'selected':'')+'>'+y+'年'+m+'月</option>')}return o.join('')})()+'</select></label>'
- +'<h3 class="sec-title">勉強する科目と、いまの偏差値</h3>'+select('模試の種類','mockType',['河合','東進','進研','駿台'],j.mockType)+(JC.subjectsOf?JC.subjectsOf():[]).map(box).join('')
- +'<h3 class="sec-title">持っている教材</h3>'+ownRows+combo('教材を追加（なくてもOK）','ownPick',mi,'','教材名を入力',true)
- +'<h3 class="sec-title">終わった教材</h3>'+doneRows+combo('教材を追加（なくてもOK）','donePick',mi,'','教材名を入力');
+ const examSel='<label class="field">入試の年月<select name="examYm" required><option value="">選んでください</option>'+(()=>{const y0=Number(S.date.slice(0,4)),m0=Number(S.date.slice(5,7)),o=[];for(let k=0;k<40;k++){const m=(m0-1+k)%12+1,y=y0+Math.floor((m0-1+k)/12),v=y+'-'+String(m).padStart(2,'0');o.push('<option value="'+v+'" '+(j.examYm===v?'selected':'')+'>'+y+'年'+m+'月</option>')}return o.join('')})()+'</select></label>';
+ return card('志望校',univSel+deptSel+bandSel+devRow+examSel)
+ +card('勉強する科目と、いまの偏差値',select('模試の種類','mockType',['河合','東進','進研','駿台'],j.mockType)+(JC.subjectsOf?JC.subjectsOf():[]).map(box).join(''))
+ +card('持っている教材',ownRows+combo('教材を追加（なくてもOK）','ownPick',mi,'','教材名を入力',true))
+ +card('終わった教材',doneRows+combo('教材を追加（なくてもOK）','donePick',mi,'','教材名を入力'));
 }
 function jukenSummary(a){const j=a.juken||{};return kvr('志望校',esc(j.univ||'未選択'))+kvr('入試',esc(j.examYm||''))+kvr('いまの偏差値',Object.keys(j.subjectDevs||{}).length?esc((j.subjects||[]).filter(x=>(j.subjectDevs||{})[x]!=null).map(x=>x+' '+j.subjectDevs[x]).join('、'))+'<br><span class="caption">'+esc(j.mockType||'')+'の偏差値</span>':'未入力')+kvr('科目',esc((j.subjects||[]).join('、')))+(j.owned&&j.owned.length?kvr('持っている教材',esc(j.owned.map(o=>o.name).join('、'))):'')+((j.doneMats||[]).length?kvr('終わった教材',esc(j.doneMats.map(o=>o.name).join('、'))):'')}
 function jukenCapture(data,w){
