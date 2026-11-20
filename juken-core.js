@@ -127,10 +127,10 @@
     }).filter(function (o) { return o.name; });
   }
   // 終わった教材：ルートの教材と同じ教材か、同じ種類・同じレベルの教材なら、その枠を、終了（自己評価が低ければ2周目）にする。持っている教材とは、別のもの
-  function resolveDone(d, list) { return (list || []).map(function (x) { var m = x && x.id ? d.materials[x.id] : null; return { id: x && x.id, check: x && x.check, tp: m ? tagParts(m[6]) : null, used: false }; }).filter(function (x) { return x.id && x.check; }); }
+  function resolveDone(d, list) { return (list || []).map(function (x) { var m = x && x.id ? d.materials[x.id] : null; return { id: x && x.id, check: x && x.check, pos: Number(x && x.pos) || 0, tp: m ? tagParts(m[6]) : null, used: false }; }).filter(function (x) { return x.id && x.check; }); }
   function takeDone(done, routeId, itemId, rp) {
     var hit = done.filter(function (x) { return !x.used && (x.id === routeId || x.id === itemId); })[0] || (rp ? done.filter(function (x) { return !x.used && x.tp && x.tp.cat === rp.cat && x.tp.lvl === rp.lvl; })[0] : null);
-    if (!hit) return null; hit.used = true; return hit.check;
+    if (!hit) return null; hit.used = true; return hit;
   }
   function pickOwned(list, rp) {      // 同じ種類の手持ちから、同じレベル→近い上のレベル→下のレベル、の順に選ぶ
     var c = list.filter(function (o) { return !o.used && o.tp && o.tp.cat === rp.cat; });
@@ -185,16 +185,19 @@
             }
           }
         }
-        var chk = fmap[r[4]] || fmap[item.id] || takeDone(done, r[4], item.id, rp);
+        var dn = null, chk = fmap[r[4]] || fmap[item.id]; if (!chk) { dn = takeDone(done, r[4], item.id, rp); chk = dn && dn.check; }
         item.lvl = lvl; item.post = post; item.cat = rp ? rp.cat : ''; item.minPerUnit = STANDARD_WEEKLY_MIN / item.pace;
-        if (chk) {                                   // 終えた教材
-          if (chk === 'weak' || chk === 'half') { item.review = true; item.selfCheck = chk; }
+        if (chk === 'part' && !(dn && dn.pos >= 1)) chk = null;
+        if (chk === 'part' && dn.pos >= item.total) chk = 'ok';
+        if (chk) {                                   // 終えた教材（途中までのときは、残りだけ）
+          if (chk === 'part') { item.baseDone = dn.pos; item.doneUnits = dn.pos; }
+          else if (chk === 'weak' || chk === 'half') { item.review = true; item.selfCheck = chk; }
           else { item.finished = true; item.preDone = true; item.doneUnits = item.total; item.minutes = 0; items.push(item); return; }
         } else if (!usedOwn) {
           if (need != null && !post && lvl > need) { skipped.push({ id: item.id, name: item.name, reason: '目標の偏差値に対して、上のレベルのため、入れません' }); return; }
           if (fit != null && !post && !isBasicCat(rp && rp.cat) && lvl <= fit - 2) { skipped.push({ id: item.id, name: item.name, reason: 'いまの偏差値には、やさしいため、飛ばすことをおすすめします', suggest: true }); return; }
         }
-        item.minutes = Math.round(item.total / item.pace * STANDARD_WEEKLY_MIN);
+        item.minutes = Math.round((item.total - (item.baseDone || 0)) / item.pace * STANDARD_WEEKLY_MIN);
         items.push(item);
       });
       work.push({ subject: subject, dev: dev, gap: dev == null || target == null ? 0 : Math.max(0, target - dev), skipped: skipped, items: items });
@@ -221,7 +224,7 @@
         preSpeed = required < capacity ? Math.min(cap, pre / preWeeks / STANDARD_WEEKLY_MIN) : cap;
       } else { preSpeed = postSpeed = o.weeklyMinutes ? o.weeklyMinutes / STANDARD_WEEKLY_MIN : 1; }
       preSpeed = Math.max(0.05, preSpeed); postSpeed = Math.max(0.05, postSpeed);
-      var setWeeks = function () { w.items.forEach(function (i) { if (i.finished) { i.weeks = 1; return; } var sp = i.post ? postSpeed : preSpeed; i.speed = Math.abs(sp - 1) < 0.001 ? null : sp; i.weeks = Math.max(1, Math.ceil(i.total / (i.pace * sp))); }); };
+      var setWeeks = function () { w.items.forEach(function (i) { if (i.finished) { i.weeks = 1; return; } var sp = i.post ? postSpeed : preSpeed; i.speed = Math.abs(sp - 1) < 0.001 ? null : sp; i.weeks = Math.max(1, Math.ceil((i.total - (i.baseDone || 0)) / (i.pace * sp))); }); };
       setWeeks();
       // 教材ごとに、週を切り上げるぶん、合計が期間を超えることがある。超えたら、速さを上げて、期間に収める
       var maxSp = capacity != null && required > 0 ? Math.max(cap, 0.05) : Infinity;      // 使える量を超える速さには、しない（超えるぶんは、「入試までに終わりません」として知らせる）
