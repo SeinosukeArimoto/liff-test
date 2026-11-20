@@ -126,6 +126,12 @@
       return { id: m ? o.id : '', name: m ? m[0] : String((o && o.name) || '').slice(0, 60), mat: m, tp: tp, used: false };
     }).filter(function (o) { return o.name; });
   }
+  // 終わった教材：ルートの教材と同じ教材か、同じ種類・同じレベルの教材なら、その枠を、終了（自己評価が低ければ2周目）にする。持っている教材とは、別のもの
+  function resolveDone(d, list) { return (list || []).map(function (x) { var m = x && x.id ? d.materials[x.id] : null; return { id: x && x.id, check: x && x.check, tp: m ? tagParts(m[6]) : null, used: false }; }).filter(function (x) { return x.id && x.check; }); }
+  function takeDone(done, routeId, itemId, rp) {
+    var hit = done.filter(function (x) { return !x.used && (x.id === routeId || x.id === itemId); })[0] || (rp ? done.filter(function (x) { return !x.used && x.tp && x.tp.cat === rp.cat && x.tp.lvl === rp.lvl; })[0] : null);
+    if (!hit) return null; hit.used = true; return hit.check;
+  }
   function pickOwned(list, rp) {      // 同じ種類の手持ちから、同じレベル→近い上のレベル→下のレベル、の順に選ぶ
     var c = list.filter(function (o) { return !o.used && o.tp && o.tp.cat === rp.cat; });
     var eq = c.filter(function (o) { return o.tp.lvl === rp.lvl; }), up = c.filter(function (o) { return o.tp.lvl > rp.lvl; }).sort(function (a, b) { return a.tp.lvl - b.tp.lvl; }), low = c.filter(function (o) { return o.tp.lvl < rp.lvl; });
@@ -158,7 +164,7 @@
   //  5. 科目ごとに、やるべき量の比で、使える時間を分ける（みんな、同じころに終わる）。時間が余るときは、期間全体にならす
   // 引数：band・subjects・start・examYm・owned・devs（科目→河合基準の偏差値）・target（志望校の偏差値）・finished（科目→{教材ID→'ok'|'half'|'weak'}）・capacity（使える量：分）・weeklyMinutes（capacityがないときの、科目ごとの週の分数）・dev（全体の偏差値。科目ごとがないときの代わり）
   function materialPlan(o) {
-    var d = routeData(o.data), out = [], own = resolveOwned(d, o.owned), devs = o.devs || {}, fin = o.finished || {}, target = o.target == null || o.target === '' ? null : Number(o.target), need = target == null ? null : fitLevel(target), work = [];
+    var d = routeData(o.data), out = [], own = resolveOwned(d, o.owned), done = resolveDone(d, o.doneMats), devs = o.devs || {}, fin = o.finished || {}, target = o.target == null || o.target === '' ? null : Number(o.target), need = target == null ? null : fitLevel(target), work = [];
     (o.subjects || []).forEach(function (subject) {
       var rows = routeRows(d, o.band, subject);
       if (!rows) { work.push({ subject: subject, missing: true, dev: null, gap: 0, skipped: [], items: [] }); return; }
@@ -179,7 +185,7 @@
             }
           }
         }
-        var os = o.ownedStatus || {}, chk = fmap[r[4]] || fmap[item.id] || os[item.id] || os[r[4]];
+        var chk = fmap[r[4]] || fmap[item.id] || takeDone(done, r[4], item.id, rp);
         item.lvl = lvl; item.post = post; item.cat = rp ? rp.cat : ''; item.minPerUnit = STANDARD_WEEKLY_MIN / item.pace;
         if (chk) {                                   // 終えた教材
           if (chk === 'weak' || chk === 'half') { item.review = true; item.selfCheck = chk; }
@@ -268,7 +274,7 @@
     // 教材：科目ごとの偏差値・終えた教材・使える量から決める。進め方（標準／短期）は、そのあと、やるべき量と使える量で決まる（選ばせない）
     var mp = null, devs = {};
     Object.keys(o.subjectDevs || {}).forEach(function (k) { var v = o.subjectDevs[k]; if (v != null && v !== '') devs[k] = correct(mockType, v); });
-    if (o.subjects && o.subjects.length) mp = materialPlan({ band: band, subjects: o.subjects, start: o.start, examYm: o.examYm, owned: o.owned, weeklyMinutes: o.weeklyMinutes, dev: overall, devs: devs, target: o.univ && o.univ.dev, finished: o.finished, ownedStatus: o.ownedStatus, capacity: o.capacity });
+    if (o.subjects && o.subjects.length) mp = materialPlan({ band: band, subjects: o.subjects, start: o.start, examYm: o.examYm, owned: o.owned, weeklyMinutes: o.weeklyMinutes, dev: overall, devs: devs, target: o.univ && o.univ.dev, finished: o.finished, doneMats: o.doneMats, capacity: o.capacity });
     var route = o.route || (mp && mp.load && mp.load.ratio != null ? (mp.load.ratio > 1 ? 'short' : 'std') : chooseRoute(o.start, o.examYm));
     var rm = roadmap({ band: band, route: route, start: o.start, examYm: o.examYm });
     // 国公立（帯1〜4）がベースで、私立（帯5〜7）を併願するとき：秋以降の過去問演習に、私立特有の形式に慣れる期間を入れる
