@@ -115,12 +115,12 @@ function jukenStep(w){
  const devRow=j.band?(other?field('志望校の偏差値','dev',j.dev==null?'':j.dev,'number','min="30" max="85" step="0.5" inputmode="decimal"'):'<div class="kv"><span>志望校の偏差値</span><b>'+(j.dev==null?'—':j.dev)+'</b></div>'):'';
  const box=x=>'<div class="subjrow"><label class="checkrow"><input type="checkbox" name="subj" value="'+esc(x)+'" '+(j.subjects.includes(x)?'checked':'')+'> '+esc(x)+'</label><input name="sdev|'+esc(x)+'" type="number" min="20" max="85" step="0.5" inputmode="decimal" placeholder="偏差値" aria-label="'+esc(x)+'の偏差値" value="'+((j.subjectDevs||{})[x]==null?'':j.subjectDevs[x])+'"></div>';
  j.subjectDevs=j.subjectDevs||{};
- const cat=JC.catalog?JC.catalog():{},mi=Object.keys(cat).map(id=>({v:id,t:cat[id][0],s:cat[id][1],k:nz(cat[id][0])}));
+ const cat=JC.catalog?JC.catalog():{},mi=Object.keys(cat).filter(id=>jukenSubj(j,cat[id])).map(id=>({v:id,t:cat[id][0],s:cat[id][1],k:nz(cat[id][0])}));
  const ownRows=j.owned.map((o,i)=>'<div class="planrow"><span class="nm">'+esc(o.name)+'</span>'+btn('外す','removeOwn','secondary sm',{i})+'</div>').join('');
  const examSel='<label class="field">入試の年月<select name="examYm" required><option value="">選んでください</option>'+(()=>{const y0=Number(S.date.slice(0,4)),m0=Number(S.date.slice(5,7)),o=[];for(let k=0;k<40;k++){const m=(m0-1+k)%12+1,y=y0+Math.floor((m0-1+k)/12),v=y+'-'+String(m).padStart(2,'0');o.push('<option value="'+v+'" '+(j.examYm===v?'selected':'')+'>'+y+'年'+m+'月</option>')}return o.join('')})()+'</select></label>';
  return card('志望校',univSel+deptSel+bandSel+devRow+examSel)
  +card('勉強する科目と、いまの偏差値',select('模試の種類','mockType',['河合','東進','進研','駿台'],j.mockType)+(JC.subjectsOf?JC.subjectsOf():[]).map(box).join(''))
- +card('持っている教材',ownRows+combo('教材を追加（なくてもOK）','ownPick',mi,'','教材名を入力',true));
+ +card('持っている教材','<p class="caption">勉強する科目の教材だけ、入れてください。</p>'+ownRows+combo('教材を追加（なくてもOK）','ownPick',mi,'','教材名を入力',true));
 }
 // 持っている教材のうち、計画で使うもの（レベルが合うもの）だけ、次のページで「終わっている？」を聞く。当てはまるものがなければ、そのページは出ない
 function jukenSubj(j,m){const ss=j.subjects||[];return ss.find(x=>x===m[1])||ss.find(x=>x.startsWith(m[1]))||null}
