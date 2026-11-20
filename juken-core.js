@@ -179,7 +179,7 @@
             }
           }
         }
-        var chk = fmap[r[4]] || fmap[item.id];
+        var os = o.ownedStatus || {}, chk = fmap[r[4]] || fmap[item.id] || os[item.id] || os[r[4]];
         item.lvl = lvl; item.post = post; item.cat = rp ? rp.cat : ''; item.minPerUnit = STANDARD_WEEKLY_MIN / item.pace;
         if (chk) {                                   // 終えた教材
           if (chk === 'weak' || chk === 'half') { item.review = true; item.selfCheck = chk; }
@@ -268,7 +268,7 @@
     // 教材：科目ごとの偏差値・終えた教材・使える量から決める。進め方（標準／短期）は、そのあと、やるべき量と使える量で決まる（選ばせない）
     var mp = null, devs = {};
     Object.keys(o.subjectDevs || {}).forEach(function (k) { var v = o.subjectDevs[k]; if (v != null && v !== '') devs[k] = correct(mockType, v); });
-    if (o.subjects && o.subjects.length) mp = materialPlan({ band: band, subjects: o.subjects, start: o.start, examYm: o.examYm, owned: o.owned, weeklyMinutes: o.weeklyMinutes, dev: overall, devs: devs, target: o.univ && o.univ.dev, finished: o.finished, capacity: o.capacity });
+    if (o.subjects && o.subjects.length) mp = materialPlan({ band: band, subjects: o.subjects, start: o.start, examYm: o.examYm, owned: o.owned, weeklyMinutes: o.weeklyMinutes, dev: overall, devs: devs, target: o.univ && o.univ.dev, finished: o.finished, ownedStatus: o.ownedStatus, capacity: o.capacity });
     var route = o.route || (mp && mp.load && mp.load.ratio != null ? (mp.load.ratio > 1 ? 'short' : 'std') : chooseRoute(o.start, o.examYm));
     var rm = roadmap({ band: band, route: route, start: o.start, examYm: o.examYm });
     // 国公立（帯1〜4）がベースで、私立（帯5〜7）を併願するとき：秋以降の過去問演習に、私立特有の形式に慣れる期間を入れる
