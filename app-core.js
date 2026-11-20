@@ -39,7 +39,9 @@ function normalize(input,today){
  if(!Array.isArray(a.availability)||a.availability.length!==7)fail('曜日ごとの時間を入力してください');a.availability=a.availability.map(function(n){return number(n,0,720)});if(!a.availability.some(function(n){return n>0}))fail('少なくとも1日は勉強時間を選んでください');a.target=text(a.target,200);
  if(a.type==='juken'&&a.juken){var j=a.juken,ex=/^\d{4}-\d{2}$/.test(j.examYm)?j.examYm:fail('入試の年月を、YYYY-MMの形で入力してください');
   var span=days(a.start,ex+'-01');if(span<0||span>365*8)fail('入試の年月を確認してください');
-  a.juken={band:number(j.band,1,7),examYm:ex,univ:text(j.univ,60),dev:j.dev==null||j.dev===''?null:Number(j.dev),mockType:['河合','東進','進研','駿台'].indexOf(j.mockType)>=0?j.mockType:'',mockScore:j.mockScore==null||j.mockScore===''?null:Number(j.mockScore),route:j.route==='std'||j.route==='short'?j.route:'',autoTasks:!!auto,owned:Array.isArray(j.owned)?j.owned.slice(0,20).map(function(x){return {id:text(x&&x.id,20),name:text(x&&x.name,60)}}).filter(function(x){return x.id||x.name}):[],others:Array.isArray(j.others)?j.others.map(Number).filter(function(b,i,arr){return Number.isInteger(b)&&b>=1&&b<=7&&arr.indexOf(b)===i}).slice(0,6):[],subjects:Array.isArray(j.subjects)?j.subjects.map(function(x){return text(x,20)}).filter(function(x,i,arr){return x&&arr.indexOf(x)===i}):[]};
+  a.juken={band:number(j.band,1,7),examYm:ex,univ:text(j.univ,60),dev:j.dev==null||j.dev===''?null:Number(j.dev),mockType:['河合','東進','進研','駿台'].indexOf(j.mockType)>=0?j.mockType:'',mockScore:j.mockScore==null||j.mockScore===''?null:Number(j.mockScore),route:'',autoTasks:!!auto,owned:Array.isArray(j.owned)?j.owned.slice(0,20).map(function(x){return {id:text(x&&x.id,20),name:text(x&&x.name,60)}}).filter(function(x){return x.id||x.name}):[],others:Array.isArray(j.others)?j.others.map(Number).filter(function(b,i,arr){return Number.isInteger(b)&&b>=1&&b<=7&&arr.indexOf(b)===i}).slice(0,6):[],subjects:Array.isArray(j.subjects)?j.subjects.map(function(x){return text(x,20)}).filter(function(x,i,arr){return x&&arr.indexOf(x)===i}):[]};
+  var sd={},sdr=j.subjectDevs&&typeof j.subjectDevs==='object'?j.subjectDevs:{};a.juken.subjects.forEach(function(x){var v=sdr[x];if(v==null||v==='')return;v=Number(v);if(!(v>=20&&v<=85))fail('偏差値を確認してください：'+x);sd[x]=v});a.juken.subjectDevs=sd;
+  a.juken.finished=(Array.isArray(j.finished)?j.finished:[]).filter(function(f){return f&&a.juken.subjects.indexOf(f.subject)>=0&&['ok','half','weak'].indexOf(f.check)>=0&&text(f.id,20)}).slice(0,80).map(function(f){return {subject:f.subject,id:text(f.id,20),check:f.check}});
   if(a.juken.subjects.length>12)fail('科目は12個までです');var known=JC.subjectsOf();a.juken.subjects.forEach(function(x){if(known.indexOf(x)<0)fail('科目を確認してください：'+x)});
   if(a.juken.dev!=null&&!(a.juken.dev>=30&&a.juken.dev<=85))fail('志望校の偏差値を確認してください');if(a.juken.mockScore!=null&&!(a.juken.mockScore>=20&&a.juken.mockScore<=85))fail('模試の偏差値を確認してください');}
  // 元のエンジンの決まり：学校の課題の時間（週）・予備日・行事の日は、使える時間から引く／勉強しない。定期テスト・検定・受験は、ゴールの2日前まで（前日は見直しだけ）
@@ -82,7 +84,7 @@ function lastRecord(p,records,it,subj){var last=null;p.tasks.forEach(function(t)
 // 日ごとの実績を、上段に反映する：終わった教材（実績の合計≧総学習量）は固定。遅れている教材は、残りの量で、今日から並べ直す（後ろの教材が、ずれる）。早く終わると、次が早まる
 function syncUpper(p,records,today){
  (p.juken.materials||[]).forEach(function(sp){if(sp.missing)return;
-  sp.items.forEach(function(it){if(!it.tracked||!it.total)return;
+  sp.items.forEach(function(it){if(!it.tracked||!it.total||it.preDone)return;
    it.doneUnits=itemActual(p,records,it,sp.subject);
    if(it.doneUnits>=it.total){it.finished=true;var last=lastRecord(p,records,it,sp.subject);if(last&&last<it.to)it.to=last}
    else{it.finished=false;if(it.doneUnits>0||it.from<=today)it.weeks=Math.max(1,Math.ceil((it.total-it.doneUnits)/(it.pace*(it.speed||1))))}});
@@ -151,6 +153,9 @@ function fillDue(days,tasks,dueOf){
 function dueMap(a){var m={};(a.homeworks||[]).forEach(function(h){if(m[h.name]==null)m[h.name]=h.due});return function(n){return m[n]}}
 var OTHER=null,OTHERH=null;   // 日付 → ほかの進行中の計画が、その日に使っている分数（勉強できる時間は、全部の計画で共有。計画ごとには、増えない）
 function bdays(start,end,row,habit){var b=E._internal.buildDays(start,end,row),oth=habit?OTHERH:OTHER;if(oth)b.days.forEach(function(dy){var o=oth(dy.date);if(o>0&&dy.kind==='study'){dy.cap=Math.max(0,dy.cap-o);dy.noForce=true}});return b}
+function finMap(list){var m={};(list||[]).forEach(function(f){(m[f.subject]=m[f.subject]||{})[f.id]=f.check});return m}
+function examEndOf(examYm,from,fallback){var e=examYm+'-15';return e>=from?e:fallback}   // 入試の月の15日（計画の期間は、受験では、最長180日だが、使える量は、入試まで数える）
+function capacityOf(built){var t=0;built.days.forEach(function(d){if(d.kind==='study')t+=d.cap});return t}   // 使える量：日ごとの時間の合計（予備日・行事の日・ほかの計画が使う分は、引いてある）
 function build(input,today,id){
  var a=normalize(input,today),row=rowOf(a);
  // The engine accepts enumerated measured minutes; preserve arbitrary numeric inputs by using its read-material objects below.
@@ -161,9 +166,9 @@ function build(input,today,id){
   d.items.push({text:m+' ・ '+minutes+'分',name:m,subject:m,min:minutes,from:null,to:null,unit:'分'})});
  }else{remaining=a.type==='task'?fillDue(built.days,mats,dueMap(a)):fillPar(built.days,mats)}
  var tasks=[];built.days.forEach(function(d){d.items.forEach(function(t){tasks.push({id:id+'-'+tasks.length,date:d.date,name:t.name,subject:t.subject,text:t.text,from:t.from,to:t.to,unit:t.unit,minutes:t.min})})});
- var jk=null,rm,wm=a.juken&&a.juken.autoTasks?Math.max(30,Math.round(a.availability.reduce(function(x,y){return x+y},0)/Math.max(1,a.juken.subjects.length))):undefined;
- if(a.juken){var jp=JC.plan({weeklyMinutes:wm,band:a.juken.band,others:a.juken.others,univ:{dev:a.juken.dev},mock:a.juken.mockType&&a.juken.mockScore!=null?{type:a.juken.mockType,score:a.juken.mockScore}:null,start:a.start,examYm:a.juken.examYm,route:a.juken.route||undefined,subjects:a.juken.subjects,owned:a.juken.owned});rm=jp.roadmap;if(a.juken.autoTasks){jp.materials.forEach(function(sp){(sp.items||[]).forEach(function(i){i.tracked=true})});tasks=tasksFromRoute(a,id,jp.materials,a.start,'u')}
-  jk={autoTasks:!!a.juken.autoTasks,weeklyMinutes:wm,start:a.start,dev:a.juken.dev,mock:a.juken.mockType&&a.juken.mockScore!=null?{type:a.juken.mockType,score:a.juken.mockScore}:null,subjects:a.juken.subjects,ownedInput:a.juken.owned,reviews:[],lastReview:null,materials:jp.materials,owned:jp.owned,baseBand:jp.baseBand,mixedNote:jp.mixedNote,others:a.juken.others,band:jp.band,bandName:jp.bandName,route:jp.route,routeName:jp.routeName,gap:jp.gap,adjustNote:jp.adjustNote,ratioNote:jp.ratioNote,univ:a.juken.univ,examYm:a.juken.examYm}}
+ var jk=null,rm,wm=undefined;
+ if(a.juken){var jp=JC.plan({weeklyMinutes:wm,band:a.juken.band,others:a.juken.others,univ:{dev:a.juken.dev},mock:a.juken.mockType&&a.juken.mockScore!=null?{type:a.juken.mockType,score:a.juken.mockScore}:null,mockType:a.juken.mockType||'河合',subjectDevs:a.juken.subjectDevs,finished:finMap(a.juken.finished),capacity:capacityOf(bdays(a.start,examEndOf(a.juken.examYm,a.start,a.end),row)),start:a.start,examYm:a.juken.examYm,subjects:a.juken.subjects,owned:a.juken.owned});rm=jp.roadmap;if(a.juken.autoTasks){jp.materials.forEach(function(sp){(sp.items||[]).forEach(function(i){i.tracked=true})});tasks=tasksFromRoute(a,id,jp.materials,a.start,'u')}
+  jk={autoTasks:!!a.juken.autoTasks,weeklyMinutes:wm,subjectDevs:a.juken.subjectDevs,mockType:a.juken.mockType||'河合',finishedInput:a.juken.finished,load:jp.load,recommend:jp.recommend,start:a.start,dev:a.juken.dev,mock:a.juken.mockType&&a.juken.mockScore!=null?{type:a.juken.mockType,score:a.juken.mockScore}:null,subjects:a.juken.subjects,ownedInput:a.juken.owned,reviews:[],lastReview:null,materials:jp.materials,owned:jp.owned,baseBand:jp.baseBand,mixedNote:jp.mixedNote,others:a.juken.others,band:jp.band,bandName:jp.bandName,route:jp.route,routeName:jp.routeName,gap:jp.gap,adjustNote:jp.adjustNote,ratioNote:jp.ratioNote,univ:a.juken.univ,examYm:a.juken.examYm}}
  return {id:id,type:a.type,title:a.title,target:a.target,input:a,start:a.start,goal:a.goal,end:a.end,tasks:tasks,leftovers:remaining,roadmap:rm,juken:jk,warnings:built.busy.unparsed.map(function(x){return '行事のメモを読み取れませんでした：'+x}).concat(hwWarnings(a,tasks,remaining)),status:'active',resumeAfter:null,tasksUntil:(a.juken&&a.juken.autoTasks)?winEnd(a,a.start):null};
 }
 
@@ -418,7 +423,11 @@ var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
   if(a.mock&&a.mock.score!=null){var mt=['河合','東進','進研','駿台'].indexOf(a.mock.type)>=0?a.mock.type:fail('模試の種類を確認してください'),ms=Number(a.mock.score);if(!(ms>=20&&ms<=85))fail('模試の偏差値を確認してください');jr.mock={type:mt,score:ms};if(jr.dev!=null){var cur=JC.correct0(mt,ms),g2=JC.gapLevel(jr.dev,cur);g2.current=cur;jr.gap=g2}}
   var level=jr.gap?jr.gap.level:null,devNow=jr.gap?jr.gap.current:(jr.mock?JC.correct0(jr.mock.type,jr.mock.score):null);
   if(level!==oldLevel)rv.changes.push('差の区分が、「'+(oldLevel||'不明')+'」から「'+(level||'不明')+'」に変わりました');
-  var fresh=JC.materialPlan({band:jr.band,subjects:jr.subjects,start:today,examYm:jr.examYm,level:level,route:jr.route,owned:jr.ownedInput,weeklyMinutes:jr.weeklyMinutes,dev:devNow});
+  if(a.mock&&a.mock.score!=null){jr.subjectDevs=jr.subjectDevs||{};jr.subjects.forEach(function(sn){jr.subjectDevs[sn]=Number(a.mock.score)});jr.mockType=a.mock.type}
+   if(a.mockType&&['河合','東進','進研','駿台'].indexOf(a.mockType)>=0)jr.mockType=a.mockType;
+   if(a.devs&&typeof a.devs==='object'){jr.subjectDevs=jr.subjectDevs||{};Object.keys(a.devs).forEach(function(sn){var v=a.devs[sn];if(jr.subjects.indexOf(sn)<0||v==null||v==='')return;v=Number(v);if(!(v>=20&&v<=85))fail('偏差値を確認してください：'+sn);if(jr.subjectDevs[sn]!==v)rv.changes.push(sn+'：偏差値が、'+(jr.subjectDevs[sn]==null?'未入力':jr.subjectDevs[sn])+'から'+v+'に変わりました');jr.subjectDevs[sn]=v;if(jr.mockType==null)jr.mockType='河合'})}
+   var rdevs={};Object.keys(jr.subjectDevs||{}).forEach(function(sn){rdevs[sn]=JC.correct0(jr.mockType||'河合',jr.subjectDevs[sn])});
+   var fresh=JC.materialPlan({band:jr.band,subjects:jr.subjects,start:today,examYm:jr.examYm,route:jr.route,owned:jr.ownedInput,dev:devNow,devs:rdevs,target:jr.dev,finished:finMap(jr.finishedInput),capacity:capacityOf(bdays(today<p.start?p.start:today,examEndOf(jr.examYm,today<p.start?p.start:today,p.end||p.goal),rowOf(p.input)))});jr.load=fresh.load;jr.recommend=fresh.recommend;
   jr.materials=jr.materials.map(function(old){
    var nw=fresh.filter(function(x){return x.subject===old.subject})[0];if(!nw||nw.missing||old.missing)return old;
    var bySlot={};nw.items.forEach(function(i){bySlot[i.slot]=i});var out=[],seen={};

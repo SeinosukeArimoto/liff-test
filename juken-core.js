@@ -117,6 +117,8 @@
   var STANDARD_WEEKLY_MIN = 300;      // 「週間の目安ペース」は、週5時間（300分）で進む速さと仮定した（マスタに前提の時間がない。暫定）
   var LVN = ['入門', '基礎', '標準', '応用', '難関'];
   var MINDEV = [0, 40, 50, 58, 65];          // そのレベルの教材を扱える、現在の偏差値（河合基準）の目安。暫定値
+  function fitLevel(dev) { var l = 0; for (var i = 1; i <= 4; i++) if (dev >= MINDEV[i]) l = i; return l; }       // いまの偏差値で扱える、いちばん上のレベル
+  function isBasicCat(cat) { return /単語|文法/.test(cat || ''); }       // 単語・文法は、レベルが低くても、飛ばさない・見送らない
   function tagParts(tag) { var m = /^\[(.+)_([^_\]]+)\]$/.exec(tag || ''); return m && m[2] in LEVEL ? { cat: m[1], lvl: LEVEL[m[2]], name: m[2] } : null; }
   function resolveOwned(d, owned) {
     return (owned || []).map(function (o) {
@@ -148,40 +150,87 @@
   // 科目ごとに、教材を順番に並べる。o：band・subjects・start・examYm・level・route・owned（手持ち教材：[{id}か{name}]）・dev（現在の偏差値。河合基準へ補正ずみ）
   // 共通テスト専用科目（Notion「情報I・理科基礎・公民」。ルートマスタの科目名に当てはめた）：開始は、高3の秋（9月）以降
   var KYOTSU_ONLY = ['情報I', '地学基礎', '公共', '倫理', '政経', '政経(共テ)'];
+  // 受験逆算の教材の決め方（2026-11-20）
+  //  1. 科目ごとの偏差値で、いま扱えるレベルを出す。目標の偏差値を扱えるレベルまでが「必要なレベル」。それより上の教材は入れない
+  //  2. 終えた教材：自己評価が低ければ「2周目」（同じ教材をもう一度。買い直さない）、そうでなければ「終了」
+  //  3. いま扱えるレベルより2つ以上下の教材（単語・文法は除く）は、飛ばすことをおすすめする（見送りに、理由つきで出す）
+  //  4. やるべき量（分）が、使える量（capacity）を超えたら、レベルの高い教材から見送る。単語・文法・過去問は見送らない
+  //  5. 科目ごとに、やるべき量の比で、使える時間を分ける（みんな、同じころに終わる）。時間が余るときは、期間全体にならす
+  // 引数：band・subjects・start・examYm・owned・devs（科目→河合基準の偏差値）・target（志望校の偏差値）・finished（科目→{教材ID→'ok'|'half'|'weak'}）・capacity（使える量：分）・weeklyMinutes（capacityがないときの、科目ごとの週の分数）・dev（全体の偏差値。科目ごとがないときの代わり）
   function materialPlan(o) {
-    var d = routeData(o.data), out = [], own = resolveOwned(d, o.owned);
+    var d = routeData(o.data), out = [], own = resolveOwned(d, o.owned), devs = o.devs || {}, fin = o.finished || {}, target = o.target == null || o.target === '' ? null : Number(o.target), need = target == null ? null : fitLevel(target), work = [];
     (o.subjects || []).forEach(function (subject) {
       var rows = routeRows(d, o.band, subject);
-      if (!rows) { out.push({ subject: subject, missing: true, note: 'この帯の、この科目のルートが、ルートマスタにありません' }); return; }
-      var skipped = [], items = [];
+      if (!rows) { work.push({ subject: subject, missing: true, dev: null, gap: 0, skipped: [], items: [] }); return; }
+      var dev = devs[subject] != null && devs[subject] !== '' ? Number(devs[subject]) : (o.dev != null ? Number(o.dev) : null), fit = dev == null ? null : fitLevel(dev), fmap = fin[subject] || {}, skipped = [], items = [];
       rows.forEach(function (r) {
-        var m = d.materials[r[4]], pn = Number((/^(\d)\./.exec(r[3]) || [0, 0])[1]), item = { id: r[4], name: m[0], phase: r[3], total: m[3], unit: m[4], pace: m[5], slot: r[2] }, rp = tagParts(m[6]);
+        var m = d.materials[r[4]], pn = Number((/^(\d)\./.exec(r[3]) || [0, 0])[1]), item = { id: r[4], name: m[0], phase: r[3], total: m[3], unit: m[4], pace: m[5], slot: r[2] }, rp = tagParts(m[6]), post = /^5\./.test(r[3]), lvl = rp ? rp.lvl : (post ? 9 : 2), usedOwn = false;
         // 手持ち教材の置き換え
         if (rp) {
           var cand = pickOwned(own, rp);
           if (cand) {
             if (cand.tp.lvl <= rp.lvl) {
-              if (cand.tp.lvl === rp.lvl) { cand.used = true; item = { id: cand.id, name: cand.mat[0], phase: r[3], total: cand.mat[3], unit: cand.mat[4], pace: cand.mat[5], slot: r[2], replaced: { fromId: r[4], fromName: m[0], why: '手持ちの教材が、同じ種類・同じレベルのため' } }; }
+              if (cand.tp.lvl === rp.lvl) { cand.used = true; usedOwn = true; item = { id: cand.id, name: cand.mat[0], phase: r[3], total: cand.mat[3], unit: cand.mat[4], pace: cand.mat[5], slot: r[2], replaced: { fromId: r[4], fromName: m[0], why: '手持ちの教材が、同じ種類・同じレベルのため' } }; }
               else { cand.used = true; item.hold = { kind: 'lower', ownId: cand.id, ownName: cand.mat[0], why: '手持ちの「' + cand.mat[0] + '」は、ルートの「' + m[0] + '」より、やさしいレベル（' + LVN[cand.tp.lvl] + '）です。この段階には、やさしすぎる可能性があります。' }; }
             } else {
               cand.used = true;
-              if (o.dev != null && o.dev >= MINDEV[cand.tp.lvl]) item = { id: cand.id, name: cand.mat[0], phase: r[3], total: cand.mat[3], unit: cand.mat[4], pace: cand.mat[5], slot: r[2], replaced: { fromId: r[4], fromName: m[0], why: '手持ちの教材が、1つ上のレベルで、今の偏差値で扱えるため' } };
-              else item.hold = { kind: 'upper', ownId: cand.id, ownName: cand.mat[0], why: o.dev == null ? '手持ちの「' + cand.mat[0] + '」は、ルートの「' + m[0] + '」より、難しいレベル（' + LVN[cand.tp.lvl] + '）です。偏差値が分からないため、いまの学力に合うか、判断できません。' : '手持ちの「' + cand.mat[0] + '」は、ルートの「' + m[0] + '」より、難しいレベル（' + LVN[cand.tp.lvl] + '）です。いまの偏差値（' + Math.round(o.dev * 10) / 10 + '）は、目安（' + MINDEV[cand.tp.lvl] + '）に届いていません。実力不足のため、一時保留にしています。' };
+              if (dev != null && dev >= MINDEV[cand.tp.lvl]) { usedOwn = true; item = { id: cand.id, name: cand.mat[0], phase: r[3], total: cand.mat[3], unit: cand.mat[4], pace: cand.mat[5], slot: r[2], replaced: { fromId: r[4], fromName: m[0], why: '手持ちの教材が、1つ上のレベルで、今の偏差値で扱えるため' } }; }
+              else item.hold = { kind: 'upper', ownId: cand.id, ownName: cand.mat[0], why: dev == null ? '手持ちの「' + cand.mat[0] + '」は、ルートの「' + m[0] + '」より、難しいレベル（' + LVN[cand.tp.lvl] + '）です。偏差値が分からないため、いまの学力に合うか、判断できません。' : '手持ちの「' + cand.mat[0] + '」は、ルートの「' + m[0] + '」より、難しいレベル（' + LVN[cand.tp.lvl] + '）です。いまの偏差値（' + Math.round(dev * 10) / 10 + '）は、目安（' + MINDEV[cand.tp.lvl] + '）に届いていません。実力不足のため、一時保留にしています。' };
             }
           }
         }
-        var speed = o.weeklyMinutes ? Math.min(3, Math.max(0.2, o.weeklyMinutes / STANDARD_WEEKLY_MIN)) : 1, weeks = Math.max(1, Math.ceil(item.total / (item.pace * speed))), factor = 1;
-        item.speed = speed === 1 ? null : speed; item.minPerUnit = STANDARD_WEEKLY_MIN / item.pace;
-        // 差に応じた伸縮（元の資料の方針。倍率は、有元の指示で私が決めた暫定値）：ビハインド＝基礎（フェーズ1〜2）の期間を1.5倍／リード＝基礎を半分に圧縮／標準＝そのまま
-        if (pn >= 1 && pn <= 2) { if (o.level === 'ビハインド') factor = 1.5; else if (o.level === 'リード') factor = 0.5; }
-        // ビハインドで、短期圧縮ルート（高3の夏以降のスタート）なら、応用（フェーズ4）は、スキップして過去問へつなぐ
-        if (o.level === 'ビハインド' && o.route === 'short' && pn === 4) { skipped.push({ id: item.id, name: item.name, reason: '目標との差が大きく、短期のため、応用を見送り、過去問へ' }); return; }
-        item.weeks = Math.max(1, Math.ceil(weeks * factor)); item.stretch = factor === 1 ? null : factor; items.push(item);
+        var chk = fmap[r[4]] || fmap[item.id];
+        item.lvl = lvl; item.post = post; item.cat = rp ? rp.cat : ''; item.minPerUnit = STANDARD_WEEKLY_MIN / item.pace;
+        if (chk) {                                   // 終えた教材
+          if (chk === 'weak' || chk === 'half') { item.review = true; item.selfCheck = chk; }
+          else { item.finished = true; item.preDone = true; item.doneUnits = item.total; item.minutes = 0; items.push(item); return; }
+        } else if (!usedOwn) {
+          if (need != null && !post && lvl > need) { skipped.push({ id: item.id, name: item.name, reason: '目標の偏差値に対して、上のレベルのため、入れません' }); return; }
+          if (fit != null && !post && !isBasicCat(rp && rp.cat) && lvl <= fit - 2) { skipped.push({ id: item.id, name: item.name, reason: 'いまの偏差値には、やさしいため、飛ばすことをおすすめします', suggest: true }); return; }
+        }
+        item.minutes = Math.round(item.total / item.pace * STANDARD_WEEKLY_MIN);
+        items.push(item);
       });
-      var minStart = KYOTSU_ONLY.indexOf(subject) >= 0 && o.examYm ? ((+o.examYm.slice(0, 4) - 1) + '-09-01') : null, st0 = minStart && o.start < minStart ? minStart : o.start;
-      var lay = layout(items, st0, o.examYm);
-      out.push({ minStart: minStart, subject: subject, skipped: skipped, items: items, totalWeeks: lay.totalWeeks, finish: lay.finish, fits: lay.fits, shortDays: lay.shortDays, slackWeeks: lay.slackWeeks });
+      work.push({ subject: subject, dev: dev, gap: dev == null || target == null ? 0 : Math.max(0, target - dev), skipped: skipped, items: items });
     });
+    var live = function (i) { return !i.finished && i.minutes > 0; }, sumMin = function (w) { return w.items.reduce(function (a, i) { return a + (live(i) ? i.minutes : 0); }, 0); };
+    var required0 = work.reduce(function (a, w) { return a + sumMin(w); }, 0), capacity = o.capacity != null ? Number(o.capacity) : null, trimmed = [];
+    // 足りないとき：レベルの高い教材から見送る。同じレベルなら、目標との差が小さい科目から。単語・文法・過去問は、見送らない
+    if (capacity != null) {
+      var cur = required0;
+      while (cur > capacity) {
+        var worst = null;
+        work.forEach(function (w) { w.items.forEach(function (i) { if (!live(i) || i.post || isBasicCat(i.cat) || i.replaced) return; if (!worst || i.lvl > worst.i.lvl || (i.lvl === worst.i.lvl && w.gap < worst.w.gap)) worst = { i: i, w: w }; }); });
+        if (!worst) break;
+        worst.w.items.splice(worst.w.items.indexOf(worst.i), 1); worst.w.skipped.push({ id: worst.i.id, name: worst.i.name, reason: '時間が足りないため、見送り', trim: true }); trimmed.push({ subject: worst.w.subject, name: worst.i.name, minutes: worst.i.minutes }); cur -= worst.i.minutes;
+      }
+    }
+    var required = work.reduce(function (a, w) { return a + sumMin(w); }, 0), weeksTotal = Math.max(1, dateDiff(o.start, (o.examYm || '2099-01') + '-15') / 7);
+    work.forEach(function (w) {
+      var tot = sumMin(w), post = w.items.filter(function (i) { return live(i) && i.post; }).reduce(function (a, i) { return a + i.minutes; }, 0), pre = tot - post, cap, preSpeed, postSpeed;
+      if (capacity != null && required > 0) {
+        cap = capacity / weeksTotal * (tot / required) / STANDARD_WEEKLY_MIN;          // この科目が使える、1週間あたりの量（標準の何倍か）
+        postSpeed = cap;
+        var preWeeks = Math.max(1, weeksTotal - post / (cap * STANDARD_WEEKLY_MIN));        // 時間が余るなら、期間全体にならす
+        preSpeed = required < capacity ? Math.min(cap, pre / preWeeks / STANDARD_WEEKLY_MIN) : cap;
+      } else { preSpeed = postSpeed = o.weeklyMinutes ? o.weeklyMinutes / STANDARD_WEEKLY_MIN : 1; }
+      preSpeed = Math.max(0.05, preSpeed); postSpeed = Math.max(0.05, postSpeed);
+      var setWeeks = function () { w.items.forEach(function (i) { if (i.finished) { i.weeks = 1; return; } var sp = i.post ? postSpeed : preSpeed; i.speed = Math.abs(sp - 1) < 0.001 ? null : sp; i.weeks = Math.max(1, Math.ceil(i.total / (i.pace * sp))); }); };
+      setWeeks();
+      // 教材ごとに、週を切り上げるぶん、合計が期間を超えることがある。超えたら、速さを上げて、期間に収める
+      var maxSp = capacity != null && required > 0 ? Math.max(cap, 0.05) : Infinity;      // 使える量を超える速さには、しない（超えるぶんは、「入試までに終わりません」として知らせる）
+      for (var it = 0; capacity != null && it < 8; it++) { var sumW = w.items.reduce(function (a, i) { return a + (i.finished ? 0 : i.weeks); }, 0); if (sumW <= weeksTotal || !sumW) break; var k = sumW / weeksTotal, p2 = Math.min(preSpeed * k, maxSp), q2 = Math.min(postSpeed * k, maxSp); if (p2 === preSpeed && q2 === postSpeed) break; preSpeed = p2; postSpeed = q2; setWeeks(); }
+    });
+    work.forEach(function (w) {
+      if (w.missing) { out.push({ subject: w.subject, missing: true, note: 'この帯の、この科目のルートが、ルートマスタにありません' }); return; }
+      var minStart = KYOTSU_ONLY.indexOf(w.subject) >= 0 && o.examYm ? ((+o.examYm.slice(0, 4) - 1) + '-09-01') : null, st0 = minStart && o.start < minStart ? minStart : o.start;
+      var lay = layout(w.items, st0, o.examYm);
+      out.push({ minStart: minStart, subject: w.subject, dev: w.dev, skipped: w.skipped, items: w.items, minutes: sumMin(w), totalWeeks: lay.totalWeeks, finish: lay.finish, fits: lay.fits, shortDays: lay.shortDays, slackWeeks: lay.slackWeeks });
+    });
+    var ratio = capacity ? required0 / capacity : null;
+    out.load = { required0: required0, required: required, capacity: capacity, ratio: ratio == null ? null : Math.round(ratio * 100) / 100, mode: ratio == null ? '' : ratio > 1 ? '足りない' : ratio > 0.9 ? 'ぎりぎり' : ratio > 0.7 ? 'ふつう' : 'ゆったり', needWeeklyMin: capacity ? Math.ceil(required0 / weeksTotal) : null, trimmed: trimmed };
+    // おすすめの教材：これから使う教材のうち、手持ちではないもの（計画には、勝手に買う前提で入れない。一覧で出す）
+    out.recommend = out.filter(function (sp) { return !sp.missing; }).map(function (sp) { return { subject: sp.subject, names: sp.items.filter(function (i) { return !i.finished && !i.replaced && !i.post; }).map(function (i) { return i.name; }) }; }).filter(function (x) { return x.names.length; });
     // 手持ち教材の扱いの一覧：置き換えた／保留／使わない（理由つき）。マスタにない教材は、講師が確認
     var owned = own.map(function (o) {
       var rep = null; out.forEach(function (p) { (p.items || []).forEach(function (i) { if (i.replaced && i.id === o.id) rep = { subject: p.subject, replaced: i.replaced.fromName }; if (i.hold && i.hold.ownId === o.id) rep = { subject: p.subject, hold: i.name, why: i.hold.why, kind: i.hold.kind }; }); });
@@ -213,16 +262,22 @@
 
   // 志望校と模試から、骨組みを作る。univ＝search の1件、mock＝{type, score}、start＝受験勉強のスタート日、examYm＝'2028-02'
   function plan(o) {
-    var band0 = o.band || (o.univ && o.univ.band), others = (o.others || []).filter(function (b) { return b >= 1 && b <= 7; }), band = Math.min.apply(null, [band0].concat(others)), route = o.route || chooseRoute(o.start, o.examYm), g = null;      // 併願は、上位の帯（数字が小さいほう）をベースにする
-    if (o.univ && o.univ.dev && o.mock && o.mock.score != null) { var cur = correct(o.mock.type, o.mock.score); g = gapLevel(o.univ.dev, cur); g.current = cur; }
-    var rm = roadmap({ band: band, route: route, start: o.start, examYm: o.examYm }), mp = null;
+    var band0 = o.band || (o.univ && o.univ.band), others = (o.others || []).filter(function (b) { return b >= 1 && b <= 7; }), band = Math.min.apply(null, [band0].concat(others)), g = null;      // 併願は、上位の帯（数字が小さいほう）をベースにする
+    var mockType = o.mockType || (o.mock && o.mock.type), overall = o.mock && o.mock.score != null ? correct(o.mock.type, o.mock.score) : null;
+    if (o.univ && o.univ.dev && overall != null) { g = gapLevel(o.univ.dev, overall); g.current = overall; }
+    // 教材：科目ごとの偏差値・終えた教材・使える量から決める。進め方（標準／短期）は、そのあと、やるべき量と使える量で決まる（選ばせない）
+    var mp = null, devs = {};
+    Object.keys(o.subjectDevs || {}).forEach(function (k) { var v = o.subjectDevs[k]; if (v != null && v !== '') devs[k] = correct(mockType, v); });
+    if (o.subjects && o.subjects.length) mp = materialPlan({ band: band, subjects: o.subjects, start: o.start, examYm: o.examYm, owned: o.owned, weeklyMinutes: o.weeklyMinutes, dev: overall, devs: devs, target: o.univ && o.univ.dev, finished: o.finished, capacity: o.capacity });
+    var route = o.route || (mp && mp.load && mp.load.ratio != null ? (mp.load.ratio > 1 ? 'short' : 'std') : chooseRoute(o.start, o.examYm));
+    var rm = roadmap({ band: band, route: route, start: o.start, examYm: o.examYm });
     // 国公立（帯1〜4）がベースで、私立（帯5〜7）を併願するとき：秋以降の過去問演習に、私立特有の形式に慣れる期間を入れる
     var priv = band <= 4 && others.some(function (b) { return b >= 5; }), hey = Number(o.examYm.slice(0, 4)) - 1;
     if (priv) rm = rm.map(function (r) { var y = Number(r.month.slice(0, 4)), m = Number(r.month.slice(5)), on = (y === hey && m >= 9) || (y === hey + 1 && m === 1); return on ? { month: r.month, phase: r.phase, text: (r.text + '　併願（私立）：細かい知識問題やマーク式の長文など、私立特有の形式に慣れる期間を入れる。').slice(0, 300) } : r; });
-    if (o.subjects && o.subjects.length) { mp = materialPlan({ band: band, subjects: o.subjects, start: o.start, examYm: o.examYm, level: g && g.level, route: route, owned: o.owned, weeklyMinutes: o.weeklyMinutes, dev: g ? g.current : (o.mock && o.mock.score != null ? correct(o.mock.type, o.mock.score) : null) }); rm = withMaterials(rm, mp); }
-    return { baseBand: band0, mixedNote: band !== band0 ? '併願校に、より上位の帯があるため、上位の帯（帯' + band + '）をベースにしています。' : '', band: band, bandName: BANDS[band] && BANDS[band].name, route: route, routeName: route === 'std' ? '標準進行ルート（高2秋〜高3春スタート）' : '短期圧縮ルート（高3夏頃スタート）',
-      gap: g, adjustNote: g ? ADJUST[g.level] : '', ratioNote: BANDS[band] ? BANDS[band].ratio : '', roadmap: rm, materials: mp, owned: mp ? mp.owned : null };
+    if (mp) rm = withMaterials(rm, mp);
+    return { baseBand: band0, mixedNote: band !== band0 ? '併願校に、より上位の帯があるため、上位の帯（帯' + band + '）をベースにしています。' : '', band: band, bandName: BANDS[band] && BANDS[band].name, route: route, routeName: route === 'std' ? '標準の進め方（時間に余裕がある）' : '短期の進め方（時間が足りないため、月ごとの方針を、短期にしています）',
+      gap: g, adjustNote: '', ratioNote: BANDS[band] ? BANDS[band].ratio : '', roadmap: rm, materials: mp, owned: mp ? mp.owned : null, load: mp ? mp.load : null, recommend: mp ? mp.recommend : [] };
   }
-  var api = { STANDARD_WEEKLY_MIN: STANDARD_WEEKLY_MIN, withMaterials: withMaterials, relayoutFrom: relayoutFrom, relayout: relayout, addDays: addDays, dateDiff: dateDiff, catalog: function () { return routeData().materials; }, correct0: correct, relayout_: relayout, tagParts: tagParts, MINDEV: MINDEV, LEVEL: LEVEL, subjectsOf: subjectsOf, routeRows: routeRows, materialPlan: materialPlan, BANDS: BANDS, bandNo: bandNo, chooseRoute: chooseRoute, correct: correct, gapLevel: gapLevel, ADJUST: ADJUST, roadmap: roadmap, search: search, plan: plan, PREP: PREP };
+  var api = { fitLevel: fitLevel, STANDARD_WEEKLY_MIN: STANDARD_WEEKLY_MIN, withMaterials: withMaterials, relayoutFrom: relayoutFrom, relayout: relayout, addDays: addDays, dateDiff: dateDiff, catalog: function () { return routeData().materials; }, correct0: correct, relayout_: relayout, tagParts: tagParts, MINDEV: MINDEV, LEVEL: LEVEL, subjectsOf: subjectsOf, routeRows: routeRows, materialPlan: materialPlan, BANDS: BANDS, bandNo: bandNo, chooseRoute: chooseRoute, correct: correct, gapLevel: gapLevel, ADJUST: ADJUST, roadmap: roadmap, search: search, plan: plan, PREP: PREP };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.JukenCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
