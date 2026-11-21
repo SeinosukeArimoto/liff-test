@@ -8,7 +8,7 @@
  *
  * 決めたこと（Notionに書かれていない部分）
  *  - 期間：回答の翌日から。定期テスト・検定・受験逆算は、ゴールの2日前まで（前日は見直しだけ）
- *  - 1日の使える時間＝その曜日の時間 − 学校の課題の時間（週の合計を、勉強する日で均等に割る）。予備日と、行事の日は0
+ *  - 1日の使える時間＝その曜日の時間。予備日と、行事の日は0
  *  - 1ページの時間は、実測×1.5。「まだ計っていない」は仮（数学15分、それ以外10分）で、計画表に「仮」と出す
  *  - 教材を入れた順に前から詰める。入りきらなかった分は、削らずに「入りきらなかった分」として出す
  *  - 範囲が数字でない（3-aなど）教材は、分けずに1つのまとまりとして、1ページ分の時間で置く
@@ -22,7 +22,6 @@
   var DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   var DAY_JA = ['月', '火', '水', '木', '金', '土', '日'];
   var AVAIL_MIN = { '0分': 0, '30分': 30, '1時間': 60, '1時間半': 90, '2時間': 120, '3時間以上': 180 };
-  var HW_WEEKLY_MIN = { 'ほとんどない': 0, '1〜2時間': 90, '3〜4時間': 210, '5時間以上': 300 };
   var UNIT_MIN = { '3分': 3, '5分': 5, '10分': 10, '15分': 15, '20分': 20, '30分': 30, '45分': 45, '60分': 60 };
   var FACTOR = 1.5;
   var MAX_TASKS = 10;
@@ -157,9 +156,7 @@
   function buildDays(start, end, row, opts) {
     opts = opts || {};
     var avail = availability(row), reserve = reserveIndex(row);
-    var hwWeekly = HW_WEEKLY_MIN[str(row, 'school_hw_weekly_min')] || 0;
     var studyDays = avail.filter(function (a, i) { return a > 0 && i !== reserve; }).length;
-    var hwShare = studyDays > 0 ? hwWeekly / studyDays : 0;
     var busy = parseBusy(str(row, 'busy_note'), start);
     var days = [];
     for (var d = start; diffDays(d, end) >= 0; d = addDays(d, 1)) {
@@ -167,10 +164,10 @@
       var kind = 'study', cap = 0, note = '';
       if (busy.dates[d]) { kind = 'busy'; note = busy.dates[d]; }
       else if (w === reserve) { kind = 'reserve'; }
-      else { cap = Math.max(0, Math.round(avail[w] - hwShare)); if (avail[w] === 0) kind = 'off'; }
+      else { cap = Math.max(0, Math.round(avail[w])); if (avail[w] === 0) kind = 'off'; }
       days.push({ date: d, md: md(d), dow: w, dowJa: DAY_JA[w], kind: kind, cap: cap, note: note, items: [], minutes: 0 });
     }
-    return { days: days, busy: busy, hwShare: Math.round(hwShare), avail: avail, reserve: reserve, hwWeekly: hwWeekly };
+    return { days: days, busy: busy, avail: avail, reserve: reserve };
   }
 
   // 教材を入れた順に前から詰める。入りきらなかった分を返す
@@ -253,7 +250,6 @@
     }
     var lines = [parts.join('　')];
     if (built.reserve >= 0) lines.push(DAY_JA[built.reserve] + '曜は予備日（遅れた分）');
-    if (built.hwWeekly) lines.push('学校の課題：週' + hm(built.hwWeekly) + '（上の時間から引いて計算）');
     var keys = Object.keys(built.busy.dates).sort();
     if (keys.length) lines.push('行事：' + keys.map(function (k) { return md(k); }).join('・'));
     if (built.busy.unparsed.length) lines.push('行事メモ：' + built.busy.unparsed.join('、'));
