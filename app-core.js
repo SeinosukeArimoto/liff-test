@@ -258,7 +258,7 @@ function printHtml(doc,plan,name,today){
  h+='<h1>'+esc(plan.title)+'</h1><p class="sub">'+esc(name)+'　'+md(plan.start)+'〜'+md(plan.goal)+(end!==plan.goal?'（取り組むことは、'+md(end)+'まで。前日は見直し）':'')+'　作成：'+esc(today)+'</p>';
  if(plan.target)h+='<p class="sub">目標：'+esc(plan.target)+'</p>';
  (plan.warnings||[]).forEach(function(w){h+='<p class="warn">'+esc(w)+'</p>'});
- h+='<h2>進み具合</h2><table><tr><th>今週</th><th>先週</th><th>先々週</th><th>ここまでの全体</th><th>記録の連続</th><th>遅れ</th></tr><tr><td>'+pctText(a.thisWeek)+'</td><td>'+pctText(a.lastWeek)+'</td><td>'+pctText(a.twoWeeksAgo)+'</td><td>'+pctText(a.overall)+'</td><td>'+(g.streak||0)+'日</td><td>'+(g.missedCount?g.missedCount+'個（約'+g.missedMinutes+'分）':'なし')+'</td></tr></table>';
+ h+='<h2>進み具合</h2><table><tr><th>今週</th><th>先週</th><th>先々週</th><th>ここまでの全体</th><th>記録の連続</th><th>未記録</th></tr><tr><td>'+pctText(a.thisWeek)+'</td><td>'+pctText(a.lastWeek)+'</td><td>'+pctText(a.twoWeeksAgo)+'</td><td>'+pctText(a.overall)+'</td><td>'+(g.streak||0)+'日</td><td>'+(g.missedCount?g.missedCount+'個（約'+g.missedMinutes+'分）':'なし')+'</td></tr></table>';
  if(g.remainingMinutes!=null&&plan.type!=='habit')h+='<p class="sub">残りの量：約'+g.remainingMinutes+'分　残りの日の枠：約'+g.capacityMinutes+'分'+(g.fits?'（入ります）':'<span class="warn">（入りきりません。組み直しや、量の見直しが必要です）</span>')+'</p>';
  if((plan.roadmap||[]).length)h+='<h2>月ごとの道筋（講師）</h2><table><tr><th style="width:18%">月</th><th>方針</th></tr>'+plan.roadmap.map(function(m){return '<tr><td>'+Number(m.month.slice(5))+'月（'+m.month.slice(0,4)+'）</td><td>'+esc(m.text)+'</td></tr>'}).join('')+'</table>';
  h+='<h2>日ごとの計画と実績</h2>';
@@ -454,7 +454,7 @@ var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
    p.input=jn.input;p.juken=jn.juken;p.roadmap=keepRoad||jn.roadmap;p.title=jn.title;p.target=jn.target;p.goal=jn.goal;p.end=jn.end;p.warnings=jn.warnings;
    if(p.juken.autoTasks){syncUpper(p,d.records,today);p.leftovers=[];regenTasks(p,d.records,today,'b'+today)}else{p.tasks=p.tasks.filter(function(t){return t.date<today||d.records[t.id]}).concat(jn.tasks);p.leftovers=jn.leftovers}
    msg='条件を変更して取り組むことを再作成（受験逆算）';break}
-  if(retained.length){if(p.juken)fail('受験逆算の計画は、「遅れを組み直す」を使ってください');if(p.type!=='habit'){input.materials=remainingMaterials(p,d.records,p.type==='task');if(!input.materials.length)fail('すべての範囲が終わっています');if(p.type==='task')input.homeworks=(p.input.homeworks||[]).map(function(h){var rm=input.materials.find(function(m){return m.name===h.name});return rm?Object.assign({},h,{from:rm.from,amount:rm.to-rm.from+1}):null}).filter(Boolean)}}
+  if(retained.length){if(p.juken)fail('受験逆算の計画は、「組み直す」を使ってください');if(p.type!=='habit'){input.materials=remainingMaterials(p,d.records,p.type==='task');if(!input.materials.length)fail('すべての範囲が終わっています');if(p.type==='task')input.homeworks=(p.input.homeworks||[]).map(function(h){var rm=input.materials.find(function(m){return m.name===h.name});return rm?Object.assign({},h,{from:rm.from,amount:rm.to-rm.from+1}):null}).filter(Boolean)}}
   var n=build(input,today,ctx.id);retained.forEach(function(t){if(!d.records[t.id]&&t.date<today)t.rescheduled=today});
   p.input=n.input;p.tasks=retained.concat(n.tasks);p.goal=n.goal;p.title=n.title;p.target=n.target;p.leftovers=n.leftovers;if(p.type==='habit')relayAll();msg='条件を変更して取り組むことを再作成';break;
  case 'replan':if(!p||p.status!=='active')fail('進行中の計画だけ、組み直せます');if(p.type==='habit')fail('毎日のタスクの計画は、組み直しません');if(p.juken&&p.juken.autoTasks){syncUpper(p,d.records,today);regenTasks(p,d.records,today,'r'+today);msg='上段の教材の進みを反映して、日ごとの計画を組み直し';break}
@@ -496,7 +496,7 @@ var retained=p.tasks.filter(function(t){return t.date<today||d.records[t.id]});
    if(a.mockType&&['河合','東進','進研','駿台'].indexOf(a.mockType)>=0)jr.mockType=a.mockType;
    if(a.devs&&typeof a.devs==='object'){jr.subjectDevs=jr.subjectDevs||{};Object.keys(a.devs).forEach(function(sn){var v=a.devs[sn];if(jr.subjects.indexOf(sn)<0||v==null||v==='')return;v=Number(v);if(!(v>=20&&v<=85))fail('偏差値を確認してください：'+sn);if(jr.subjectDevs[sn]!==v)rv.changes.push(sn+'：偏差値が、'+(jr.subjectDevs[sn]==null?'未入力':jr.subjectDevs[sn])+'から'+v+'に変わりました');jr.subjectDevs[sn]=v;if(jr.mockType==null)jr.mockType='河合'})}
    refreshUpper(p,rv,'v'+today);
-  var pr=progressOf(d,p,today);if(pr&&(pr.missedCount>0||(pr.achievement.lastWeek!=null&&pr.achievement.lastWeek<60)))rv.warnings.push('日ごとの計画に、遅れがあります（先週の達成率 '+(pr.achievement.lastWeek==null?'—':pr.achievement.lastWeek+'%')+'、遅れ '+pr.missedCount+'個）。上段の到達点の見直しや、組み直しを検討してください');
+  var pr=progressOf(d,p,today);if(pr&&(pr.missedCount>0||(pr.achievement.lastWeek!=null&&pr.achievement.lastWeek<60)))rv.warnings.push('日ごとの計画に、未記録があります（先週の達成率 '+(pr.achievement.lastWeek==null?'—':pr.achievement.lastWeek+'%')+'、未記録 '+pr.missedCount+'個）。上段の到達点の見直しや、組み直しを検討してください');
   jr.owned=jr.owned;if(!p.roadmapEdited)p.roadmap=JC.withMaterials(JC.roadmap({band:jr.band,route:jr.route,start:jr.start,examYm:jr.examYm}),jr.materials);
   rv.at=today;rv.level=level;jr.reviews=[rv].concat(jr.reviews||[]).slice(0,12);jr.lastReview=today;
   msg='月1回の見直し（変更'+rv.changes.length+'個、注意'+rv.warnings.length+'個）';break;
