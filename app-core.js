@@ -18,7 +18,7 @@ function withProfile(d,input){var o=copy(input||{}),pr=d.profile||defaultProfile
 function validateProfile(p){var o=copy(p||{});if(!Array.isArray(o.availability)||o.availability.length!==7)fail('曜日ごとの時間を入力してください');o.availability=o.availability.map(function(n){return number(n,0,720)});if(!o.availability.some(function(n){return n>0}))fail('少なくとも1日は、勉強時間を選んでください');o.reserveDay=['月','火','水','木','金','土','日'].indexOf(o.reserveDay)>=0?o.reserveDay:'';o.busyDates=(Array.isArray(o.busyDates)?o.busyDates:[]).filter(function(x){return x&&x.from}).map(function(x){var f=date(x.from),e=x.to?date(x.to):f;if(e<f)fail('勉強できない日の終わりは、始まり以降にしてください');if(days(f,e)>61)fail('勉強できない日は、1つにつき62日までにしてください');return {from:f,to:e}}).slice(0,12);o.custom=true;return o}
 function normalize(input,today){
  var a=copy(input||{});if(!TYPES[a.type])fail('計画の種類を選んでください');a.title=text(a.title);if(!a.title)fail('計画の名前を入力してください');
- a.start=date(a.start||today);a.goal=date(a.type==='habit'?add(a.start,27):a.type==='task'?add(a.start,6):(a.goal||add(a.start,14)));if(days(a.start,a.goal)<0||days(a.start,a.goal)>180)fail('開始日から180日以内の終了日を選んでください');
+ a.start=date(a.start||today);a.goal=date(a.type==='task'?add(a.start,6):(a.goal||add(a.start,14)));if(days(a.start,a.goal)<0||days(a.start,a.goal)>180)fail('開始日から180日以内の終了日を選んでください');
  if(a.start<today)fail('開始日は今日以降にしてください');
 
  // Notion「計画アンケートv3」：C＝毎日のタスク（タスクごとに、1日の量・数え方・1つの時間。内部の種類名は habit のまま）、C'＝課題・タスク（残りの量・提出日・提出日が近い順・期間は1週間）
@@ -235,7 +235,7 @@ function progressOf(doc,p,today){
  var set={};p.tasks.forEach(function(t){if(rec[t.id])set[t.date]=1});Object.keys(rec).forEach(function(k){if(k.indexOf('time:')===0)set[k.slice(5)]=1});
  var streak=0,d=set[today]?today:add(today,-1);while(set[d]){streak++;d=add(d,-1)}
  return {planId:p.id,achievement:{thisWeek:pct(ws,add(ws,6)),lastWeek:pct(add(ws,-7),add(ws,-1)),twoWeeksAgo:pct(add(ws,-14),add(ws,-8)),overall:pct(p.start,today)},
-  missedCount:missed.length,missedMinutes:missed.reduce(function(a,t){return a+t.minutes},0),remainingMinutes:Math.round(remaining),capacityMinutes:cap,
+  missedCount:missed.length,missedFirst:missed.reduce(function(a,t){return !a||t.date<a?t.date:a},null),missedMinutes:missed.reduce(function(a,t){return a+t.minutes},0),remainingMinutes:Math.round(remaining),capacityMinutes:cap,
   fits:p.type==='habit'||remaining<=cap,needsReplan:p.type!=='habit'&&missed.length>0,streak:streak};
 }
 
