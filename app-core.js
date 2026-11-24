@@ -235,7 +235,7 @@ function progressOf(doc,p,today){
  var set={};p.tasks.forEach(function(t){if(rec[t.id])set[t.date]=1});Object.keys(rec).forEach(function(k){if(k.indexOf('time:')===0)set[k.slice(5)]=1});
  var streak=0,d=set[today]?today:add(today,-1);while(set[d]){streak++;d=add(d,-1)}
  return {planId:p.id,achievement:{thisWeek:pct(ws,add(ws,6)),lastWeek:pct(add(ws,-7),add(ws,-1)),twoWeeksAgo:pct(add(ws,-14),add(ws,-8)),overall:pct(p.start,today)},
-  missedCount:missed.length,missedFirst:missed.reduce(function(a,t){return !a||t.date<a?t.date:a},null),missedMinutes:missed.reduce(function(a,t){return a+t.minutes},0),remainingMinutes:Math.round(remaining),capacityMinutes:cap,
+  reschedCount:p.tasks.filter(function(t){return t.date<today&&!rec[t.id]&&t.rescheduled}).length,reschedFirst:p.tasks.filter(function(t){return t.date<today&&!rec[t.id]&&t.rescheduled}).reduce(function(a,t){return !a||t.date<a?t.date:a},null),missedCount:missed.length,missedFirst:missed.reduce(function(a,t){return !a||t.date<a?t.date:a},null),missedMinutes:missed.reduce(function(a,t){return a+t.minutes},0),remainingMinutes:Math.round(remaining),capacityMinutes:cap,
   fits:p.type==='habit'||remaining<=cap,needsReplan:p.type!=='habit'&&missed.length>0,streak:streak};
 }
 
