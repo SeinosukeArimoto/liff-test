@@ -4,10 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LIFFテスト</title>
-<script>
-// 入り口の振り分け：LIFFの「つづきのパス」（liff.state）か、なければ app.html へ。確認用の画面は ?debug=1
-(function(){var q=new URLSearchParams(location.search);if(q.get('debug'))return;var st=q.get('liff.state')||'';var to=st&&st.indexOf('//')<0?'.'+(st.charAt(0)==='/'?st:'/'+st):'./app.html';if(to.indexOf('app.html')<0)to='./app.html';location.replace(to)})();
-</script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
   body { font-family: -apple-system, "Hiragino Sans", sans-serif; margin: 0; padding: 24px 16px; color: #222; }
@@ -28,6 +24,13 @@
 
   liff.init({ liffId: LIFF_ID }).then(function () {
     if (!liff.isLoggedIn()) { liff.login(); return; }
+    // 入り口の振り分け：LIFFの初期化（ログインの受け取り）が終わってから、アプリ（app.html）へ移る。確認用の画面は ?debug=1
+    if (!new URLSearchParams(location.search).get('debug')) {
+      if (/app\.html$/.test(location.pathname)) { location.reload(); return; }
+      var st = new URLSearchParams(location.search).get('liff.state') || '';
+      location.replace('./app.html' + (st.indexOf('?') >= 0 ? st.slice(st.indexOf('?')) : ''));
+      return;
+    }
     return liff.getProfile().then(function (p) {
       document.getElementById('msg').textContent = 'こんにちは、' + p.displayName + 'さん';
       document.getElementById('info').innerHTML =
