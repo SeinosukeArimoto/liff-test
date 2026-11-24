@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LIFFテスト</title>
+<script>
+// 入り口の振り分け：LIFFの「つづきのパス」（liff.state）か、なければ app.html へ。確認用の画面は ?debug=1
+(function(){var q=new URLSearchParams(location.search);if(q.get('debug'))return;var st=q.get('liff.state')||'';var to=st&&st.indexOf('//')<0?'.'+(st.charAt(0)==='/'?st:'/'+st):'./app.html';if(to.indexOf('app.html')<0)to='./app.html';location.replace(to)})();
+</script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
   body { font-family: -apple-system, "Hiragino Sans", sans-serif; margin: 0; padding: 24px 16px; color: #222; }
